@@ -10,6 +10,7 @@ project(ov_msckf)
 find_package(catkin REQUIRED COMPONENTS roscpp rosbag tf std_msgs geometry_msgs sensor_msgs nav_msgs visualization_msgs cv_bridge ov_core)
 
 # Include libraries
+find_package(inekf REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV 3 REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system filesystem thread date_time)
@@ -23,7 +24,7 @@ message(STATUS "BOOST VERSION: " ${Boost_VERSION})
 catkin_package(
         CATKIN_DEPENDS roscpp rosbag tf std_msgs geometry_msgs sensor_msgs nav_msgs visualization_msgs cv_bridge ov_core
         INCLUDE_DIRS src
-        LIBRARIES ov_msckf_lib
+        LIBRARIES ov_msckf_lib inekf
 )
 
 # Try to compile with c++11
@@ -48,6 +49,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g3 -Wall -Wuninitialized -Wmaybe-uninit
 # Include our header files
 include_directories(
         src
+        ../invariant-ekf/include
         ${EIGEN3_INCLUDE_DIR}
         ${Boost_INCLUDE_DIRS}
         ${catkin_INCLUDE_DIRS}
@@ -64,11 +66,17 @@ list(APPEND thirdparty_libraries
 # Make the core library
 ##################################################
 add_library(ov_msckf_lib
+        ../invariant-ekf/src/InEKF.cpp
+        ../invariant-ekf/src/LieGroup.cpp
+        ../invariant-ekf/src/NoiseParams.cpp
+        ../invariant-ekf/src/RobotState.cpp
         src/state/State.cpp
         src/state/StateHelper.cpp
         src/state/Propagator.cpp
         src/core/VioManager.cpp
         src/core/RosVisualizer.cpp
+        src/core/RIEKFManager.cpp
+        src/core/RIEKFVisualizer.cpp
         src/update/UpdaterHelper.cpp
         src/update/UpdaterMSCKF.cpp
         src/update/UpdaterSLAM.cpp
@@ -87,3 +95,6 @@ target_link_libraries(run_simulation ov_msckf_lib ${thirdparty_libraries})
 
 add_executable(run_subscribe_msckf src/run_subscribe_msckf.cpp)
 target_link_libraries(run_subscribe_msckf ov_msckf_lib ${thirdparty_libraries})
+
+add_executable(run_serial_riekf src/run_serial_riekf.cpp)
+target_link_libraries(run_serial_riekf ov_msckf_lib ${thirdparty_libraries})
