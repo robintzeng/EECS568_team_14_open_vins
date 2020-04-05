@@ -153,6 +153,8 @@ class RIEKFManager
         }
 
 
+        std::shared_ptr<inekf::InEKF> filter_p_;
+
 
     protected:
 
@@ -222,8 +224,6 @@ class RIEKFManager
         std::map<size_t,std::pair<int,int>> camera_wh;
 
         inekf::RobotState state_;
-
-        std::shared_ptr<inekf::InEKF> filter_p_;
 
         double t_prev_ {0};
         Eigen::Matrix<double,6,1> imu_measurement_prev_;

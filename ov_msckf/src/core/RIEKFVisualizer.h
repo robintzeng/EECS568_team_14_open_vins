@@ -89,8 +89,6 @@ protected:
     /// Publish groundtruth (if we have it)
     void publish_groundtruth();
 
-    /// Save current estimate state and groundtruth including calibration
-    void sim_save_total_state_to_file();
 
     /// ROS node handle that we publish onto
     ros::NodeHandle _nh;
