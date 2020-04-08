@@ -38,7 +38,6 @@
 #include <boost/filesystem.hpp>
 
 #include "RIEKFManager.h"
-#include "sim/Simulator.h"
 #include "utils/dataset_reader.h"
 
 /**
@@ -61,7 +60,7 @@ public:
      * @param app Core estimator manager
      * @param sim Simulator if we are simulating
      */
-    RIEKFVisualizer(ros::NodeHandle &nh, RIEKFManager* app, Simulator* sim=nullptr);
+    RIEKFVisualizer(ros::NodeHandle &nh, RIEKFManager* app);
 
 
     /**
@@ -95,9 +94,6 @@ protected:
 
     /// Core application of the filter system
     RIEKFManager* _app;
-
-    /// Simulator (is nullptr if we are not sim'ing)
-    Simulator* _sim;
 
     // Our publishers
     ros::Publisher pub_poseimu;

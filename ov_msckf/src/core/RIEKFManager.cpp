@@ -8,6 +8,34 @@ using namespace ov_core;
 #define DT_MIN 1e-6
 #define DT_MAX 1
 
+
+namespace conversion_utils{
+
+inekf::RobotState convert_ov_state_to_inekf_state(ov_msckf::State* ov_state){
+    inekf::RobotState robot_state;
+
+    Eigen::Matrix3d R0;
+    Eigen::Vector3d v0, p0, bg0, ba0;
+
+    p0 = ov_state->imu()->pos();
+    v0 = ov_state->imu()->vel();
+    R0 = ov_state->imu()->Rot();
+    ba0 = ov_state->imu()->bias_a();
+    bg0 = ov_state->imu()->bias_g();
+    auto cov = ov_state->Cov();
+
+    robot_state.setRotation(R0);
+    robot_state.setVelocity(v0);
+    robot_state.setPosition(p0);
+    robot_state.setGyroscopeBias(bg0);
+    robot_state.setAccelerometerBias(ba0);
+    robot_state.setP(cov);
+
+    return robot_state;
+}
+
+}
+
 RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
 
 
@@ -309,35 +337,24 @@ RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
     updaterSLAM = new UpdaterSLAM(slam_options, aruco_options, featinit_options);
 
 
-}
+    State* ov_state_p = get_state();
+    inekf::RobotState initial_robot_state = conversion_utils::convert_ov_state_to_inekf_state(ov_state_p);
 
 
-void RIEKFManager::initialize_filter(inekf::RobotState initial_state, inekf::NoiseParams noise_params){
-
-    // inekf::NoiseParams noise_params;
+    // TODO(lowmanj): pull off noise params from initializer above
+    inekf::NoiseParams noise_params;
     noise_params.setGyroscopeNoise(0.01);
     noise_params.setAccelerometerNoise(0.1);
     noise_params.setGyroscopeBiasNoise(0.00001);
     noise_params.setAccelerometerBiasNoise(0.0001);
     noise_params.setLandmarkNoise(0.1);
 
+    initialize_filter(initial_robot_state, noise_params);
 
-    // inekf::RobotState initial_state;
-    Eigen::Matrix3d R0;
-    Eigen::Vector3d v0, p0, bg0, ba0;
-    R0 << 1, 0, 0, // initial orientation
-          0, -1, 0, // IMU frame is rotated 90deg about the x-axis
-          0, 0, -1;
-    v0 << 0,0,0; // initial velocity
-    p0 << 0,0,0; // initial position
-    bg0 << 0,0,0; // initial gyroscope bias
-    ba0 << 0,0,0; // initial accelerometer bias
-    initial_state.setRotation(R0);
-    initial_state.setVelocity(v0);
-    initial_state.setPosition(p0);
-    initial_state.setGyroscopeBias(bg0);
-    initial_state.setAccelerometerBias(ba0);
+}
 
+
+void RIEKFManager::initialize_filter(inekf::RobotState initial_state, inekf::NoiseParams noise_params){
     auto f = inekf::InEKF(initial_state, noise_params);
     filter_p_ = std::make_shared<inekf::InEKF>(f);
 
@@ -364,7 +381,24 @@ void RIEKFManager::feed_measurement_imu(double timestamp, Eigen::Vector3d wm, Ei
 
     double dt = timestamp - t_prev_;
     if (dt > DT_MIN && dt < DT_MAX) {
+        ROS_INFO("Propagating through filter....");
+        // Update filter_p state from OV state
+        State* ov_state_p = get_state();
+        inekf::RobotState robot_state = conversion_utils::convert_ov_state_to_inekf_state(ov_state_p);
+        ROS_INFO("Setting state");
+
+        filter_p_->setState(robot_state);
+
+        ROS_INFO("filter.propagate");
         filter_p_->Propagate(imu_measurement_prev_, dt);
+        ROS_INFO("Finished propagating through filter....");
+
+        // TODO(lowmanj): Update OV state with inekf State params
+        // robot_state = filter_p_->getState();
+        // inekf::RobotState robot_state = conversion_utils::convert_ov_state_to_inekf_state(ov_state_p);
+
+
+
     }
 
     t_prev_ = timestamp;

@@ -4,7 +4,7 @@
 using namespace ov_msckf;
 
 
-RIEKFVisualizer::RIEKFVisualizer(ros::NodeHandle &nh, RIEKFManager* app, Simulator *sim) : _nh(nh), _app(app), _sim(sim) {
+RIEKFVisualizer::RIEKFVisualizer(ros::NodeHandle &nh, RIEKFManager* app) : _nh(nh), _app(app) {
 
 
     // Setup our transform broadcaster
@@ -38,8 +38,8 @@ RIEKFVisualizer::RIEKFVisualizer(ros::NodeHandle &nh, RIEKFManager* app, Simulat
     pub_pathgt = nh.advertise<nav_msgs::Path>("/ov_msckf/pathgt", 2);
     ROS_INFO("Publishing: %s", pub_pathgt.getTopic().c_str());
 
-    // Load groundtruth if we have it and are not doing simulation
-    if (nh.hasParam("path_gt") && _sim==nullptr) {
+    // Load groundtruth if we have it
+    if (nh.hasParam("path_gt")) {
         std::string path_to_gt;
         nh.param<std::string>("path_gt", path_to_gt, "");
         DatasetReader::load_gt_file(path_to_gt, gt_states);
@@ -68,14 +68,6 @@ RIEKFVisualizer::RIEKFVisualizer(ros::NodeHandle &nh, RIEKFManager* app, Simulat
         of_state_std.open(filepath_std.c_str());
         of_state_est << "# timestamp(s) q p v bg ba cam_imu_dt num_cam cam0_k cam0_d cam0_rot cam0_trans .... etc" << std::endl;
         of_state_std << "# timestamp(s) q p v bg ba cam_imu_dt num_cam cam0_k cam0_d cam0_rot cam0_trans .... etc" << std::endl;
-
-        // Groundtruth if we are simulating
-        if(_sim != nullptr) {
-            if(boost::filesystem::exists(filepath_gt))
-                boost::filesystem::remove(filepath_gt);
-            of_state_gt.open(filepath_gt.c_str());
-            of_state_gt << "# timestamp(s) q p v bg ba cam_imu_dt num_cam cam0_k cam0_d cam0_rot cam0_trans .... etc" << std::endl;
-        }
 
     }
 
@@ -124,14 +116,6 @@ void RIEKFVisualizer::visualize_final() {
         ROS_INFO("\033[0;95mRMSE average: %.3f (m) position\033[0m",summed_rmse_pos/summed_number);
     }
 
-    // Publish RMSE and NEES if doing simulation
-    if(_sim != nullptr) {
-        ROS_INFO("\033[0;95mRMSE average: %.3f (deg) orientation\033[0m",summed_rmse_ori/summed_number);
-        ROS_INFO("\033[0;95mRMSE average: %.3f (m) position\033[0m",summed_rmse_pos/summed_number);
-        ROS_INFO("\033[0;95mNEES average: %.3f (deg) orientation\033[0m",summed_nees_ori/summed_number);
-        ROS_INFO("\033[0;95mNEES average: %.3f (m) position\033[0m",summed_nees_pos/summed_number);
-    }
-
     // Print the total time
     rT2 =  boost::posix_time::microsec_clock::local_time();
     ROS_INFO("\033[0;95mTIME: %.3f seconds\033[0m",(rT2-rT1).total_microseconds()*1e-6);
@@ -148,7 +132,6 @@ void RIEKFVisualizer::publish_state() {
     inekf::RobotState rstate = _app->filter_p_->getState();
 
     auto rquat = Eigen::Quaterniond(rstate.getRotation());
-
 
     // Create pose of IMU (note we use the bag time)
     geometry_msgs::PoseWithCovarianceStamped poseIinM;
@@ -419,46 +402,6 @@ void RIEKFVisualizer::publish_features() {
     // Publish
     pub_points_aruco.publish(cloud_ARUCO);
 
-
-    //====================================================================
-    //====================================================================
-
-    // Skip the rest of we are not doing simulation
-    if(_sim == nullptr)
-        return;
-
-    // Get our good features
-    std::unordered_map<size_t,Eigen::Vector3d> feats_sim = _sim->get_map();
-
-    // Declare message and sizes
-    sensor_msgs::PointCloud2 cloud_SIM;
-    cloud_SIM.header.frame_id = "global";
-    cloud_SIM.header.stamp = ros::Time::now();
-    cloud_SIM.width  = 3*feats_sim.size();
-    cloud_SIM.height = 1;
-    cloud_SIM.is_bigendian = false;
-    cloud_SIM.is_dense = false; // there may be invalid points
-
-    // Setup pointcloud fields
-    sensor_msgs::PointCloud2Modifier modifier_SIM(cloud_SIM);
-    modifier_SIM.setPointCloud2FieldsByString(1,"xyz");
-    modifier_SIM.resize(3*feats_sim.size());
-
-    // Iterators
-    sensor_msgs::PointCloud2Iterator<float> out_x_SIM(cloud_SIM, "x");
-    sensor_msgs::PointCloud2Iterator<float> out_y_SIM(cloud_SIM, "y");
-    sensor_msgs::PointCloud2Iterator<float> out_z_SIM(cloud_SIM, "z");
-
-    // Fill our iterators
-    for(const auto &pt : feats_sim) {
-        *out_x_SIM = pt.second(0); ++out_x_SIM;
-        *out_y_SIM = pt.second(1); ++out_y_SIM;
-        *out_z_SIM = pt.second(2); ++out_z_SIM;
-    }
-
-    // Publish
-    pub_points_sim.publish(cloud_SIM);
-
 }
 
 
@@ -469,14 +412,10 @@ void RIEKFVisualizer::publish_groundtruth() {
     Eigen::Matrix<double,17,1> state_gt;
 
     // Check that we have the timestamp in our GT file [time(sec),q_GtoI,p_IinG,v_IinG,b_gyro,b_accel]
-    if(_sim == nullptr && (gt_states.empty() || !DatasetReader::get_gt_state(_app->get_state()->timestamp(), state_gt, gt_states))) {
+    if((gt_states.empty() || !DatasetReader::get_gt_state(_app->get_state()->timestamp(), state_gt, gt_states))) {
         return;
     }
 
-    // Get the simulated groundtruth
-    if(_sim != nullptr && !_sim->get_state(_app->get_state()->timestamp(),state_gt)) {
-        return;
-    }
 
     // Get the GT and system state state
     Eigen::Matrix<double,16,1> state_ekf = _app->get_state()->imu()->value();
@@ -541,7 +480,8 @@ void RIEKFVisualizer::publish_groundtruth() {
     //==========================================================================
 
     // Get covariance of pose
-    Eigen::Matrix<double,6,6> covariance = _app->get_state()->Cov().block(_app->get_state()->imu()->pose()->id(),_app->get_state()->imu()->pose()->id(),6,6);
+        Eigen::Matrix<double,6,6> covariance = _app->get_state()->Cov().block(_app->get_state()->imu()->pose()->id(),_app->get_state()->imu()->pose()->id(),6,6);
+    // Eigen::Matrix<double,6,6> covariance = _app->filter_p_->getState().block(_app->get_state()->imu()->pose()->id(),_app->get_state()->imu()->pose()->id(),6,6);
 
     // Calculate NEES values
     double ori_nees = 2*quat_diff.block(0,0,3,1).dot(covariance.block(0,0,3,3).inverse()*2*quat_diff.block(0,0,3,1));
