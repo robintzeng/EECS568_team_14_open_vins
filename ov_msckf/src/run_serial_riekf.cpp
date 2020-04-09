@@ -139,14 +139,8 @@ int main(int argc, char** argv)
     //===================================================================================
     //===================================================================================
 
-
-    int message_count = 0;
-
     // Step through the rosbag
     for (const rosbag::MessageInstance& m : view) {
-
-        message_count++;
-        ROS_INFO("message number: %i ", message_count);
 
         // If ros is wants us to stop, break out
         if (!ros::ok())
@@ -155,7 +149,6 @@ int main(int argc, char** argv)
         // Handle IMU measurement
         sensor_msgs::Imu::ConstPtr s2 = m.instantiate<sensor_msgs::Imu>();
         if (s2 != NULL && m.getTopic() == topic_imu) {
-            ROS_INFO("message is topic_imu");
 
             // convert into correct format
             double timem = (*s2).header.stamp.toSec();
@@ -169,7 +162,6 @@ int main(int argc, char** argv)
         // Handle LEFT camera
         sensor_msgs::Image::ConstPtr s0 = m.instantiate<sensor_msgs::Image>();
         if (s0 != NULL && m.getTopic() == topic_camera0) {
-            ROS_INFO("message is topic_camera0");
 
             // Get the image
             cv_bridge::CvImageConstPtr cv_ptr;
@@ -188,7 +180,6 @@ int main(int argc, char** argv)
         // Handle RIGHT camera
         sensor_msgs::Image::ConstPtr s1 = m.instantiate<sensor_msgs::Image>();
         if (s1 != NULL && m.getTopic() == topic_camera1) {
-            ROS_INFO("message is topic_camera1");
 
             // Get the image
             cv_bridge::CvImageConstPtr cv_ptr;
@@ -208,11 +199,9 @@ int main(int argc, char** argv)
             //}
         }
 
-        ROS_INFO("processed messages");
 
         // Fill our buffer if we have not
         if(has_left && img0_buffer.rows == 0) {
-            ROS_INFO("filling left buffer");
 
             has_left = false;
             time_buffer = time;
@@ -221,7 +210,6 @@ int main(int argc, char** argv)
 
         // Fill our buffer if we have not
         if(has_right && img1_buffer.rows == 0) {
-            ROS_INFO("filling right buffer");
 
             has_right = false;
             img1_buffer = img1.clone();
@@ -230,7 +218,6 @@ int main(int argc, char** argv)
 
         // If we are in monocular mode, then we should process the left if we have it
         if(max_cameras==1 && has_left) {
-            ROS_INFO("monocular mode, processing left");
             // process once we have initialized with the GT
             Eigen::Matrix<double, 17, 1> imustate;
             if(!gt_states.empty() && !sys->intialized() && DatasetReader::get_gt_state(time_buffer,imustate,gt_states)) {
@@ -248,6 +235,30 @@ int main(int argc, char** argv)
             time_buffer = time;
             img0_buffer = img0.clone();
         }
+
+        // If we are in stereo mode and have both left and right, then process
+        if(max_cameras==2 && has_left && has_right) {
+            // process once we have initialized with the GT
+            Eigen::Matrix<double, 17, 1> imustate;
+            if(!gt_states.empty() && !sys->intialized() && DatasetReader::get_gt_state(time_buffer,imustate,gt_states)) {
+                //biases are pretty bad normally, so zero them
+                //imustate.block(11,0,6,1).setZero();
+                sys->initialize_with_gt(imustate);
+            } else if(gt_states.empty() || sys->intialized()) {
+                ROS_INFO("feeding stereo measurement ");
+                sys->feed_measurement_stereo(time_buffer, img0_buffer, img1_buffer, 0, 1);
+            }
+            // visualize
+            viz->visualize();
+            // reset bools
+            has_left = false;
+            has_right = false;
+            // move buffer forward
+            time_buffer = time;
+            img0_buffer = img0.clone();
+            img1_buffer = img1.clone();
+        }
+
 
     }
 
