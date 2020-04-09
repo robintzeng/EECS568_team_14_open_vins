@@ -60,6 +60,17 @@ class RIEKFManager
 
 
         /**
+         * @brief Feed function for stereo camera pair
+         * @param timestamp Time that this image was collected
+         * @param img0 Grayscale image
+         * @param img1 Grayscale image
+         * @param cam_id0 Unique id of what camera the image is from
+         * @param cam_id1 Unique id of what camera the image is from
+         */
+        void feed_measurement_stereo(double timestamp, cv::Mat& img0, cv::Mat& img1, size_t cam_id0, size_t cam_id1);
+
+
+        /**
          * @brief Given a state, this will initialize our IMU state.
          * @param imustate State in the MSCKF ordering: [time(sec),q_GtoI,p_IinG,v_IinG,b_gyro,b_accel]
          */

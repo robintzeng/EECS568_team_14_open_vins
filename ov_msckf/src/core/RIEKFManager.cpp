@@ -34,6 +34,54 @@ inekf::RobotState convert_ov_state_to_inekf_state(ov_msckf::State* ov_state){
     return robot_state;
 }
 
+// TODO(lowmanj): Complete this function and call it after propagating inekf state
+ov_msckf::State* convert_inekf_state_to_ov_state(inekf::RobotState robot_state,
+                                                ov_msckf::State* ov_state){
+
+    auto R0 = robot_state.getRotation();
+    auto v0 = robot_state.getVelocity();
+    auto p0 = robot_state.getPosition();
+    auto bg0 = robot_state.getGyroscopeBias();
+    auto ba0 = robot_state.getAccelerometerBias();
+    auto cov = robot_state.getP();
+
+
+    auto rquat = Eigen::Quaterniond(robot_state.getRotation());
+    Eigen::Vector3d quat0;
+    quat0 << rquat.x(), rquat.y(), rquat.z(); // assume rquat.w() is 1
+
+    Eigen::Matrix<double,16,1> new_value; // 16x1 matrix
+
+    // IMU pose is 3d quaternion, then 3d postiion
+    new_value.block(0, 0, 3, 1) << quat0;
+    new_value.block(4, 0, 3, 1) << p0;
+    new_value.block(7, 0, 3, 1) << v0;
+    new_value.block(10, 0, 3, 1) << bg0;
+    new_value.block(13, 0, 3, 1) << ba0;
+
+    ov_state->imu()->set_value(new_value);
+
+    // TODO(lowmanj): How to set ov_state covariance from robot_state?
+
+    return ov_state;
+}
+
+
+inekf::vectorLandmarks convert_ov_features_to_landmarks(std::vector<Feature*> features_p){
+    inekf::vectorLandmarks landmarks;
+
+    for (auto feature_p: features_p){
+
+        auto id = feature_p->featid; // unique id
+        auto p_bl = feature_p->p_FinG; // position of feature in global frame
+
+        inekf::Landmark landmark(id, p_bl);
+        landmarks.push_back(landmark);
+    }
+
+    return landmarks;
+}
+
 }
 
 RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
@@ -381,11 +429,11 @@ void RIEKFManager::feed_measurement_imu(double timestamp, Eigen::Vector3d wm, Ei
 
     double dt = timestamp - t_prev_;
     if (dt > DT_MIN && dt < DT_MAX) {
-        ROS_INFO("Propagating through filter....");
+        // ROS_INFO("Propagating through filter....");
         // Update filter_p state from OV state
         State* ov_state_p = get_state();
         inekf::RobotState robot_state = conversion_utils::convert_ov_state_to_inekf_state(ov_state_p);
-        ROS_INFO("Setting state");
+        // ROS_INFO("Setting state");
 
         filter_p_->setState(robot_state);
 
@@ -439,6 +487,45 @@ void RIEKFManager::feed_measurement_monocular(double timestamp, cv::Mat& img0, s
 }
 
 
+void RIEKFManager::feed_measurement_stereo(double timestamp, cv::Mat& img0, cv::Mat& img1, size_t cam_id0, size_t cam_id1) {
+
+    // Start timing
+    rT1 =  boost::posix_time::microsec_clock::local_time();
+
+    // Assert we have good ids
+    assert(cam_id0!=cam_id1);
+
+    // Feed our stereo trackers, if we are not doing binocular
+    if(use_stereo) {
+        trackFEATS->feed_stereo(timestamp, img0, img1, cam_id0, cam_id1);
+    } else {
+        boost::thread t_l = boost::thread(&TrackBase::feed_monocular, trackFEATS, boost::ref(timestamp), boost::ref(img0), boost::ref(cam_id0));
+        boost::thread t_r = boost::thread(&TrackBase::feed_monocular, trackFEATS, boost::ref(timestamp), boost::ref(img1), boost::ref(cam_id1));
+        t_l.join();
+        t_r.join();
+    }
+
+    // If aruoc is avalible, the also pass to it
+    // NOTE: binocular tracking for aruco doesn't make sense as we by default have the ids
+    // NOTE: thus we just call the stereo tracking if we are doing binocular!
+    if(trackARUCO != nullptr) {
+        trackARUCO->feed_stereo(timestamp, img0, img1, cam_id0, cam_id1);
+    }
+    rT2 =  boost::posix_time::microsec_clock::local_time();
+
+    // If we do not have VIO initialization, then try to initialize
+    // TODO: Or if we are trying to reset the system, then do that here!
+    if(!is_initialized_vio) {
+        is_initialized_vio = try_to_initialize();
+        if(!is_initialized_vio) return;
+    }
+
+    // Call on our propagate and update function
+    ROS_INFO("stereo measure calling do_feature_propagate_update called ");
+    do_feature_propagate_update(timestamp);
+
+}
+
 
 bool RIEKFManager::try_to_initialize() {
 
@@ -482,6 +569,7 @@ bool RIEKFManager::try_to_initialize() {
 
 void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
+    ROS_INFO("do_feature_propagate_update called ");
 
     //===================================================================================
     // State propagation, and clone augmentation
@@ -625,6 +713,10 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     featsup_MSCKF.insert(featsup_MSCKF.end(), feats_marg.begin(), feats_marg.end());
     featsup_MSCKF.insert(featsup_MSCKF.end(), feats_maxtracks.begin(), feats_maxtracks.end());
 
+
+    // Call InEKF update here
+    inekf::vectorLandmarks measured_landmarks = conversion_utils::convert_ov_features_to_landmarks(featsup_MSCKF);
+    filter_p_->CorrectLandmarks(measured_landmarks);
 
     //===================================================================================
     // Now that we have a list of features, lets do the EKF update for MSCKF and SLAM!
