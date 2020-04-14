@@ -181,6 +181,23 @@ namespace ov_msckf {
             return _features_SLAM;
         }
 
+        void set_cov(Eigen::MatrixXd new_cov){
+            _Cov = new_cov;
+        }
+
+        void print_info() const{
+            std::cout << "Size of _variables: " << _variables.size() << std::endl;
+            std::cout << "Size of _clones_IMU: " << _clones_IMU.size()<< std::endl;
+            std::cout << "Size of _features_SLAM: " << _features_SLAM.size()<< std::endl;
+
+            int var_num = 0;
+            for (auto var: _variables){
+                std::cout << "Variable number " << var_num << " : " << var->value() << std::endl;
+                var_num++ ;
+            }
+
+        }
+
 
     protected:
 

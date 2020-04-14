@@ -177,6 +177,8 @@ namespace ov_msckf {
             return data;
         }
 
+        std::vector<IMUDATA> get_prop_imu_data(State* state, double timestamp);
+
 
     protected:
 

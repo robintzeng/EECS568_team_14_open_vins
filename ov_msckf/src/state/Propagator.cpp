@@ -27,6 +27,24 @@ using namespace ov_msckf;
 
 
 
+std::vector<Propagator::IMUDATA> Propagator::get_prop_imu_data(State* state, double timestamp) {
+    // Set the last time offset value if we have just started the system up
+    if(last_prop_time_offset == -INFINITY) {
+        last_prop_time_offset = state->calib_dt_CAMtoIMU()->value()(0);
+    }
+
+    // Get what our IMU-camera offset should be (t_imu = t_cam + calib_dt)
+    double t_off_new = state->calib_dt_CAMtoIMU()->value()(0);
+
+    // First lets construct an IMU vector of measurements we need
+    double time0 = state->timestamp()+last_prop_time_offset;
+    double time1 = timestamp+t_off_new;
+    vector<IMUDATA> prop_data = Propagator::select_imu_readings(imu_data,time0,time1);
+
+    return prop_data;
+}
+
+
 
 void Propagator::propagate_and_clone(State* state, double timestamp) {
 
@@ -50,19 +68,8 @@ void Propagator::propagate_and_clone(State* state, double timestamp) {
     //===================================================================================
     //===================================================================================
     //===================================================================================
-
-    // Set the last time offset value if we have just started the system up
-    if(last_prop_time_offset == -INFINITY) {
-        last_prop_time_offset = state->calib_dt_CAMtoIMU()->value()(0);
-    }
-
-    // Get what our IMU-camera offset should be (t_imu = t_cam + calib_dt)
     double t_off_new = state->calib_dt_CAMtoIMU()->value()(0);
-
-    // First lets construct an IMU vector of measurements we need
-    double time0 = state->timestamp()+last_prop_time_offset;
-    double time1 = timestamp+t_off_new;
-    vector<IMUDATA> prop_data = Propagator::select_imu_readings(imu_data,time0,time1);
+    vector<IMUDATA> prop_data = get_prop_imu_data(state, timestamp);
 
     // We are going to sum up all the state transition matrices, so we can do a single large multiplication at the end
     // Phi_summed = Phi_i*Phi_summed

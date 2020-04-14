@@ -13,6 +13,7 @@ namespace conversion_utils{
 
 inekf::RobotState convert_ov_state_to_inekf_state(ov_msckf::State* ov_state){
     inekf::RobotState robot_state;
+    // RobotState(Eigen::MatrixXd& X, Eigen::VectorXd& Theta, Eigen::MatrixXd& P);
 
     Eigen::Matrix3d R0;
     Eigen::Vector3d v0, p0, bg0, ba0;
@@ -22,7 +23,10 @@ inekf::RobotState convert_ov_state_to_inekf_state(ov_msckf::State* ov_state){
     R0 = ov_state->imu()->Rot();
     ba0 = ov_state->imu()->bias_a();
     bg0 = ov_state->imu()->bias_g();
-    auto cov = ov_state->Cov();
+    auto cov = ov_state->Cov().block(0, 0, 15, 15); // Get the IMU Covariance
+
+    std::cout << "Rows of ov_state.cov: " << cov.rows() << ". Cols of ov_state.cov: " << cov.cols() << std::endl;
+    // ov_state->print_info();
 
     robot_state.setRotation(R0);
     robot_state.setVelocity(v0);
@@ -35,6 +39,7 @@ inekf::RobotState convert_ov_state_to_inekf_state(ov_msckf::State* ov_state){
 }
 
 // TODO(lowmanj): Complete this function and call it after propagating inekf state
+// The covariance needs to be considered
 ov_msckf::State* convert_inekf_state_to_ov_state(inekf::RobotState robot_state,
                                                 ov_msckf::State* ov_state){
 
@@ -47,27 +52,31 @@ ov_msckf::State* convert_inekf_state_to_ov_state(inekf::RobotState robot_state,
 
 
     auto rquat = Eigen::Quaterniond(robot_state.getRotation());
-    Eigen::Vector3d quat0;
-    quat0 << rquat.x(), rquat.y(), rquat.z(); // assume rquat.w() is 1
+    Eigen::Vector4d quat0;
+    quat0 << rquat.x(), rquat.y(), rquat.z(), rquat.w();
 
-    Eigen::Matrix<double,16,1> new_value; // 16x1 matrix
+    Eigen::Matrix<double,16,1> new_value = ov_state->imu()->value();
 
     // IMU pose is 3d quaternion, then 3d postiion
-    new_value.block(0, 0, 3, 1) << quat0;
+    new_value.block(0, 0, 4, 1) << quat0;
     new_value.block(4, 0, 3, 1) << p0;
     new_value.block(7, 0, 3, 1) << v0;
     new_value.block(10, 0, 3, 1) << bg0;
     new_value.block(13, 0, 3, 1) << ba0;
 
     ov_state->imu()->set_value(new_value);
+    ov_state->imu()->set_fej(new_value);
 
     // TODO(lowmanj): How to set ov_state covariance from robot_state?
+    // StateHelper?
+    ov_state->set_cov(cov);
 
     return ov_state;
 }
 
 
 inekf::vectorLandmarks convert_ov_features_to_landmarks(std::vector<Feature*> features_p){
+    ROS_INFO("Converting ov features to landmarks ");
     inekf::vectorLandmarks landmarks;
 
     for (auto feature_p: features_p){
@@ -78,6 +87,8 @@ inekf::vectorLandmarks convert_ov_features_to_landmarks(std::vector<Feature*> fe
         inekf::Landmark landmark(id, p_bl);
         landmarks.push_back(landmark);
     }
+
+    ROS_INFO("Finished converting ov features to landmarks ");
 
     return landmarks;
 }
@@ -405,8 +416,6 @@ RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
 void RIEKFManager::initialize_filter(inekf::RobotState initial_state, inekf::NoiseParams noise_params){
     auto f = inekf::InEKF(initial_state, noise_params);
     filter_p_ = std::make_shared<inekf::InEKF>(f);
-
-    imu_measurement_prev_ = Eigen::Matrix<double,6,1>::Zero();
 }
 
 
@@ -419,38 +428,6 @@ void RIEKFManager::feed_measurement_imu(double timestamp, Eigen::Vector3d wm, Ei
     if(!is_initialized_vio) {
         initializer->feed_imu(timestamp, wm, am);
     }
-
-
-    // InEKF Propagation
-    Eigen::Matrix<double,6,1> imu_measurement = Eigen::Matrix<double,6,1>::Zero();
-
-    imu_measurement << wm[0], wm[1], wm[2],
-                       am[0], am[1], am[2];
-
-    double dt = timestamp - t_prev_;
-    if (dt > DT_MIN && dt < DT_MAX) {
-        // ROS_INFO("Propagating through filter....");
-        // Update filter_p state from OV state
-        State* ov_state_p = get_state();
-        inekf::RobotState robot_state = conversion_utils::convert_ov_state_to_inekf_state(ov_state_p);
-        // ROS_INFO("Setting state");
-
-        filter_p_->setState(robot_state);
-
-        ROS_INFO("filter.propagate");
-        filter_p_->Propagate(imu_measurement_prev_, dt);
-        ROS_INFO("Finished propagating through filter....");
-
-        // TODO(lowmanj): Update OV state with inekf State params
-        // robot_state = filter_p_->getState();
-        // inekf::RobotState robot_state = conversion_utils::convert_ov_state_to_inekf_state(ov_state_p);
-
-
-
-    }
-
-    t_prev_ = timestamp;
-    imu_measurement_prev_ = imu_measurement;
 
 
 }
@@ -521,7 +498,6 @@ void RIEKFManager::feed_measurement_stereo(double timestamp, cv::Mat& img0, cv::
     }
 
     // Call on our propagate and update function
-    ROS_INFO("stereo measure calling do_feature_propagate_update called ");
     do_feature_propagate_update(timestamp);
 
 }
@@ -590,6 +566,38 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     // Also augment it with a new clone!
     propagator->propagate_and_clone(state, timestamp);
     rT3 =  boost::posix_time::microsec_clock::local_time();
+
+
+    // InEKF Propagation
+    auto prop_imu_data = propagator->get_prop_imu_data(state, timestamp);
+
+    auto m_last = prop_imu_data.end()[-1];
+    auto m_2_last = prop_imu_data.end()[-2];
+
+    Eigen::Matrix<double,6,1> imu_measurement_prev = Eigen::Matrix<double,6,1>::Zero();
+    Eigen::Matrix<double,6,1> imu_measurement = Eigen::Matrix<double,6,1>::Zero();
+
+    imu_measurement_prev << m_2_last.wm[0], m_2_last.wm[1], m_2_last.wm[2],
+                             m_2_last.am[0], m_2_last.am[1], m_2_last.am[2];
+
+    imu_measurement << m_last.wm[0], m_last.wm[1], m_last.wm[2],
+                       m_last.am[0], m_last.am[1], m_last.am[2];
+
+    double dt = m_last.timestamp - m_2_last.timestamp;
+    // if (dt > DT_MIN && dt < DT_MAX) {
+        // Update filter_p state from OV state
+        State* ov_state_p = get_state();
+        inekf::RobotState robot_state = conversion_utils::convert_ov_state_to_inekf_state(ov_state_p);
+
+        filter_p_->setState(robot_state);
+
+        filter_p_->Propagate(imu_measurement_prev, dt);
+
+        // TODO(lowmanj): Update OV state with inekf State params
+        robot_state = filter_p_->getState();
+        conversion_utils::convert_inekf_state_to_ov_state(robot_state, ov_state_p);
+    // }
+
 
     // If we have not reached max clones, we should just return...
     // This isn't super ideal, but it keeps the logic after this easier...
@@ -714,10 +722,6 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     featsup_MSCKF.insert(featsup_MSCKF.end(), feats_maxtracks.begin(), feats_maxtracks.end());
 
 
-    // Call InEKF update here
-    inekf::vectorLandmarks measured_landmarks = conversion_utils::convert_ov_features_to_landmarks(featsup_MSCKF);
-    filter_p_->CorrectLandmarks(measured_landmarks);
-
     //===================================================================================
     // Now that we have a list of features, lets do the EKF update for MSCKF and SLAM!
     //===================================================================================
@@ -726,6 +730,17 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     // We update first so that our SLAM initialization will be more accurate??
     updaterMSCKF->update(state, featsup_MSCKF);
     rT4 =  boost::posix_time::microsec_clock::local_time();
+
+
+    // TODO(lowmanj): Call InEKF update here
+    inekf::vectorLandmarks measured_landmarks = conversion_utils::convert_ov_features_to_landmarks(featsup_MSCKF);
+    ROS_INFO("InEKF Correcting landmarks");
+
+    ROS_INFO("Number of measured landmarks: %d", measured_landmarks.size());
+
+    filter_p_->CorrectLandmarks(measured_landmarks);
+    ROS_INFO("Finished correcting landmarks");
+
 
     // Perform SLAM delay init and update
     updaterSLAM->update(state, feats_slam_UPDATE);
