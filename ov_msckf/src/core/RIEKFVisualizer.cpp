@@ -129,37 +129,23 @@ void RIEKFVisualizer::publish_state() {
     // Get the current state
     State* state = _app->get_state();
 
-    inekf::RobotState rstate = _app->filter_p_->getState();
-
-    auto rquat = Eigen::Quaterniond(rstate.getRotation());
-
     // Create pose of IMU (note we use the bag time)
     geometry_msgs::PoseWithCovarianceStamped poseIinM;
     poseIinM.header.stamp = ros::Time(state->timestamp());
     poseIinM.header.seq = poses_seq_imu;
     poseIinM.header.frame_id = "global";
-
-    poseIinM.pose.pose.orientation.x = rquat.x();
-    poseIinM.pose.pose.orientation.y = rquat.y();
-    poseIinM.pose.pose.orientation.z = rquat.z();
-    poseIinM.pose.pose.orientation.w = rquat.w();
-    poseIinM.pose.pose.position.x = rstate.getPosition()[0];
-    poseIinM.pose.pose.position.y = rstate.getPosition()[1];
-    poseIinM.pose.pose.position.z = rstate.getPosition()[2];
+    poseIinM.pose.pose.orientation.x = state->imu()->quat()(0);
+    poseIinM.pose.pose.orientation.y = state->imu()->quat()(1);
+    poseIinM.pose.pose.orientation.z = state->imu()->quat()(2);
+    poseIinM.pose.pose.orientation.w = state->imu()->quat()(3);
+    poseIinM.pose.pose.position.x = state->imu()->pos()(0);
+    poseIinM.pose.pose.position.y = state->imu()->pos()(1);
+    poseIinM.pose.pose.position.z = state->imu()->pos()(2);
 
     // Finally set the covariance in the message (in the order position then orientation as per ros convention)
     std::vector<Type*> statevars;
-    auto pos = rstate.getPosition();
-
-    Vec* pos_vec = new Vec(3);
-    pos_vec->update(pos);
-
-    JPLQuat* quat_vec =  new JPLQuat();
-    quat_vec->update(rquat.vec());
-
-    statevars.push_back(pos_vec);
-    statevars.push_back(quat_vec);
-
+    statevars.push_back(state->imu()->pose()->p());
+    statevars.push_back(state->imu()->pose()->q());
     Eigen::Matrix<double,6,6> covariance_posori = StateHelper::get_marginal_covariance(_app->get_state(),statevars);
     for(int r=0; r<6; r++) {
         for(int c=0; c<6; c++) {
@@ -180,18 +166,13 @@ void RIEKFVisualizer::publish_state() {
     odomIinM.twist.twist.angular.x = 0; // we do not estimate this...
     odomIinM.twist.twist.angular.y = 0; // we do not estimate this...
     odomIinM.twist.twist.angular.z = 0; // we do not estimate this...
-
-    auto rvel = rstate.getVelocity();
-    odomIinM.twist.twist.linear.x = rvel[0];
-    odomIinM.twist.twist.linear.y = rvel[1];
-    odomIinM.twist.twist.linear.z = rvel[2];
+    odomIinM.twist.twist.linear.x = state->imu()->vel()(0);
+    odomIinM.twist.twist.linear.y = state->imu()->vel()(1);
+    odomIinM.twist.twist.linear.z = state->imu()->vel()(2);
 
     // Velocity covariance (linear then angular)
-    Vec* rvel_type = new Vec(3);
-    rvel_type->update(rvel);
-
     statevars.clear();
-    statevars.push_back(rvel_type);
+    statevars.push_back(state->imu()->v());
     Eigen::Matrix<double,6,6> covariance_linang = INFINITY*Eigen::Matrix<double,6,6>::Identity();
     covariance_linang.block(0,0,3,3) = StateHelper::get_marginal_covariance(_app->get_state(),statevars);
     for(int r=0; r<6; r++) {
@@ -254,9 +235,140 @@ void RIEKFVisualizer::publish_state() {
         mTfBr->sendTransform(trans);
     }
 
-    delete pos_vec;
-    delete quat_vec;
-    delete rvel_type;
+
+
+
+    // // Get the current state
+    // State* state = _app->get_state();
+
+    // inekf::RobotState rstate = _app->filter_p_->getState();
+
+    // auto rquat = Eigen::Quaterniond(rstate.getRotation());
+
+    // // Create pose of IMU (note we use the bag time)
+    // geometry_msgs::PoseWithCovarianceStamped poseIinM;
+    // poseIinM.header.stamp = ros::Time(state->timestamp());
+    // poseIinM.header.seq = poses_seq_imu;
+    // poseIinM.header.frame_id = "global";
+
+    // poseIinM.pose.pose.orientation.x = rquat.x();
+    // poseIinM.pose.pose.orientation.y = rquat.y();
+    // poseIinM.pose.pose.orientation.z = rquat.z();
+    // poseIinM.pose.pose.orientation.w = rquat.w();
+    // poseIinM.pose.pose.position.x = rstate.getPosition()[0];
+    // poseIinM.pose.pose.position.y = rstate.getPosition()[1];
+    // poseIinM.pose.pose.position.z = rstate.getPosition()[2];
+
+    // // Finally set the covariance in the message (in the order position then orientation as per ros convention)
+    // std::vector<Type*> statevars;
+    // auto pos = rstate.getPosition();
+
+    // Vec* pos_vec = new Vec(3);
+    // pos_vec->update(pos);
+
+    // JPLQuat* quat_vec =  new JPLQuat();
+    // quat_vec->update(rquat.vec());
+
+    // statevars.push_back(pos_vec);
+    // statevars.push_back(quat_vec);
+
+    // Eigen::Matrix<double,6,6> covariance_posori = StateHelper::get_marginal_covariance(_app->get_state(),statevars);
+    // for(int r=0; r<6; r++) {
+    //     for(int c=0; c<6; c++) {
+    //         poseIinM.pose.covariance[6*r+c] = covariance_posori(r,c);
+    //     }
+    // }
+    // pub_poseimu.publish(poseIinM);
+
+    // //=========================================================
+    // //=========================================================
+
+    // // Our odometry message (note we do not fill out angular velocities)
+    // nav_msgs::Odometry odomIinM;
+    // odomIinM.header = poseIinM.header;
+    // odomIinM.pose.pose = poseIinM.pose.pose;
+    // odomIinM.pose.covariance = poseIinM.pose.covariance;
+    // odomIinM.child_frame_id = "imu";
+    // odomIinM.twist.twist.angular.x = 0; // we do not estimate this...
+    // odomIinM.twist.twist.angular.y = 0; // we do not estimate this...
+    // odomIinM.twist.twist.angular.z = 0; // we do not estimate this...
+
+    // auto rvel = rstate.getVelocity();
+    // odomIinM.twist.twist.linear.x = rvel[0];
+    // odomIinM.twist.twist.linear.y = rvel[1];
+    // odomIinM.twist.twist.linear.z = rvel[2];
+
+    // // Velocity covariance (linear then angular)
+    // Vec* rvel_type = new Vec(3);
+    // rvel_type->update(rvel);
+
+    // statevars.clear();
+    // statevars.push_back(rvel_type);
+    // Eigen::Matrix<double,6,6> covariance_linang = INFINITY*Eigen::Matrix<double,6,6>::Identity();
+    // covariance_linang.block(0,0,3,3) = StateHelper::get_marginal_covariance(_app->get_state(),statevars);
+    // for(int r=0; r<6; r++) {
+    //     for(int c=0; c<6; c++) {
+    //         odomIinM.twist.covariance[6*r+c] = (std::isnan(covariance_linang(r,c))) ? 0 : covariance_linang(r,c);
+    //     }
+    // }
+    // pub_odomimu.publish(odomIinM);
+
+
+    // //=========================================================
+    // //=========================================================
+
+    // // Append to our pose vector
+    // geometry_msgs::PoseStamped posetemp;
+    // posetemp.header = poseIinM.header;
+    // posetemp.pose = poseIinM.pose.pose;
+    // poses_imu.push_back(posetemp);
+
+    // // Create our path (imu)
+    // nav_msgs::Path arrIMU;
+    // arrIMU.header.stamp = ros::Time::now();
+    // arrIMU.header.seq = poses_seq_imu;
+    // arrIMU.header.frame_id = "global";
+    // arrIMU.poses = poses_imu;
+    // pub_pathimu.publish(arrIMU);
+
+    // // Move them forward in time
+    // poses_seq_imu++;
+
+    // // Publish our transform on TF
+    // // NOTE: since we use JPL we have an implicit conversion to Hamilton when we publish
+    // // NOTE: a rotation from GtoI in JPL has the same xyzw as a ItoG Hamilton rotation
+    // tf::StampedTransform trans;
+    // trans.stamp_ = ros::Time::now();
+    // trans.frame_id_ = "global";
+    // trans.child_frame_id_ = "imu";
+    // tf::Quaternion quat(state->imu()->quat()(0),state->imu()->quat()(1),state->imu()->quat()(2),state->imu()->quat()(3));
+    // trans.setRotation(quat);
+    // tf::Vector3 orig(state->imu()->pos()(0),state->imu()->pos()(1),state->imu()->pos()(2));
+    // trans.setOrigin(orig);
+    // mTfBr->sendTransform(trans);
+
+    // // Loop through each camera calibration and publish it
+    // for(const auto &calib : state->get_calib_IMUtoCAMs()) {
+    //     // need to flip the transform to the IMU frame
+    //     Eigen::Vector4d q_ItoC = calib.second->quat();
+    //     Eigen::Vector3d p_CinI = -calib.second->Rot().transpose()*calib.second->pos();
+    //     // publish our transform on TF
+    //     // NOTE: since we use JPL we have an implicit conversion to Hamilton when we publish
+    //     // NOTE: a rotation from ItoC in JPL has the same xyzw as a CtoI Hamilton rotation
+    //     tf::StampedTransform trans;
+    //     trans.stamp_ = ros::Time::now();
+    //     trans.frame_id_ = "imu";
+    //     trans.child_frame_id_ = "cam"+std::to_string(calib.first);
+    //     tf::Quaternion quat(q_ItoC(0),q_ItoC(1),q_ItoC(2),q_ItoC(3));
+    //     trans.setRotation(quat);
+    //     tf::Vector3 orig(p_CinI(0),p_CinI(1),p_CinI(2));
+    //     trans.setOrigin(orig);
+    //     mTfBr->sendTransform(trans);
+    // }
+
+    // delete pos_vec;
+    // delete quat_vec;
+    // delete rvel_type;
 
 }
 
