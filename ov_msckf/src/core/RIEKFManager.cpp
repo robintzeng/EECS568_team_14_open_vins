@@ -25,7 +25,6 @@ inekf::RobotState convert_ov_state_to_inekf_state(ov_msckf::State* ov_state){
     bg0 = ov_state->imu()->bias_g();
     auto cov = ov_state->Cov().block(0, 0, 15, 15); // Get the IMU Covariance
 
-    std::cout << "Rows of ov_state.cov: " << cov.rows() << ". Cols of ov_state.cov: " << cov.cols() << std::endl;
     // ov_state->print_info();
 
     robot_state.setRotation(R0);
@@ -43,13 +42,11 @@ inekf::RobotState convert_ov_state_to_inekf_state(ov_msckf::State* ov_state){
 ov_msckf::State* convert_inekf_state_to_ov_state(inekf::RobotState robot_state,
                                                 ov_msckf::State* ov_state){
 
-    auto R0 = robot_state.getRotation();
     auto v0 = robot_state.getVelocity();
     auto p0 = robot_state.getPosition();
     auto bg0 = robot_state.getGyroscopeBias();
     auto ba0 = robot_state.getAccelerometerBias();
-    auto cov = robot_state.getP();
-
+    auto inekf_cov = robot_state.getP();
 
     auto rquat = Eigen::Quaterniond(robot_state.getRotation());
     Eigen::Vector4d quat0;
@@ -68,8 +65,20 @@ ov_msckf::State* convert_inekf_state_to_ov_state(inekf::RobotState robot_state,
     ov_state->imu()->set_fej(new_value);
 
     // TODO(lowmanj): How to set ov_state covariance from robot_state?
-    // StateHelper?
-    ov_state->set_cov(cov);
+    auto ov_cov = ov_state->Cov();
+    ov_cov.block<15, 15>(0, 0) = inekf_cov;
+
+
+    Eigen::VectorXd diags = ov_cov.diagonal();
+    for(int i=0; i<diags.rows(); i++) {
+        if (diags(i)<0.0){
+            std::cout << i << std::endl;
+        }
+
+        assert(diags(i)>=0.0);
+    }
+
+    ov_state->set_cov(ov_cov);
 
     return ov_state;
 }
@@ -92,6 +101,25 @@ inekf::vectorLandmarks convert_ov_features_to_landmarks(std::vector<Feature*> fe
 
     return landmarks;
 }
+
+}
+
+
+void print_current_state(State* state){
+    // Debug, print our current state
+    ROS_INFO("q_GtoI = %.3f,%.3f,%.3f,%.3f | p_IinG = %.3f,%.3f,%.3f | v_IinG = %.3f,%.3f,%.3f",
+            state->imu()->quat()(0),state->imu()->quat()(1),state->imu()->quat()(2),state->imu()->quat()(3),
+            state->imu()->pos()(0),state->imu()->pos()(1),state->imu()->pos()(2),
+            state->imu()->vel()(0),state->imu()->vel()(1),state->imu()->vel()(2));
+
+    auto cov = state->Cov();
+    ROS_INFO("Rows of cov: %d. Cols of cov: %d", cov.rows(), cov.cols());
+
+    std::cout << "Cov diags: ";
+    for (int i=0; i < 3; i++)
+    {
+        std::cout << cov.block(i, i, i+1, i+1) << ", ";
+    }
 
 }
 
@@ -399,13 +427,12 @@ RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
     State* ov_state_p = get_state();
     inekf::RobotState initial_robot_state = conversion_utils::convert_ov_state_to_inekf_state(ov_state_p);
 
-
-    // TODO(lowmanj): pull off noise params from initializer above
     inekf::NoiseParams noise_params;
-    noise_params.setGyroscopeNoise(0.01);
-    noise_params.setAccelerometerNoise(0.1);
-    noise_params.setGyroscopeBiasNoise(0.00001);
-    noise_params.setAccelerometerBiasNoise(0.0001);
+
+    noise_params.setGyroscopeNoise(imu_noises.sigma_w);
+    noise_params.setAccelerometerNoise(imu_noises.sigma_a);
+    noise_params.setGyroscopeBiasNoise(imu_noises.sigma_wb);
+    noise_params.setAccelerometerBiasNoise(imu_noises.sigma_ab);
     noise_params.setLandmarkNoise(0.1);
 
     initialize_filter(initial_robot_state, noise_params);
@@ -428,7 +455,6 @@ void RIEKFManager::feed_measurement_imu(double timestamp, Eigen::Vector3d wm, Ei
     if(!is_initialized_vio) {
         initializer->feed_imu(timestamp, wm, am);
     }
-
 
 }
 
@@ -459,7 +485,6 @@ void RIEKFManager::feed_measurement_monocular(double timestamp, cv::Mat& img0, s
 
     // Call on our propagate and update function
     do_feature_propagate_update(timestamp);
-
 
 }
 
@@ -545,8 +570,6 @@ bool RIEKFManager::try_to_initialize() {
 
 void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
-    ROS_INFO("do_feature_propagate_update called ");
-
     //===================================================================================
     // State propagation, and clone augmentation
     //===================================================================================
@@ -564,13 +587,24 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
     // Propagate the state forward to the current update time
     // Also augment it with a new clone!
+    inekf::RobotState robot_state = conversion_utils::convert_ov_state_to_inekf_state(state);
+    auto prop_imu_data = propagator->get_prop_imu_data(state, timestamp);
+    auto timestamp_before = state->timestamp();
+
+    std::cout << " " << std::endl;
+    ROS_INFO("Before MSCKF prop: ");
+    print_current_state(state);
+    // Need to keep this because it clones
     propagator->propagate_and_clone(state, timestamp);
     rT3 =  boost::posix_time::microsec_clock::local_time();
+    std::cout << " " << std::endl;
+    ROS_INFO("After MSCKF prop: ");
+    print_current_state(state);
 
+    // Reset state timestamp
+    state->set_timestamp(timestamp_before);
 
     // InEKF Propagation
-    auto prop_imu_data = propagator->get_prop_imu_data(state, timestamp);
-
     auto m_last = prop_imu_data.end()[-1];
     auto m_2_last = prop_imu_data.end()[-2];
 
@@ -586,16 +620,21 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     double dt = m_last.timestamp - m_2_last.timestamp;
     // if (dt > DT_MIN && dt < DT_MAX) {
         // Update filter_p state from OV state
-        State* ov_state_p = get_state();
-        inekf::RobotState robot_state = conversion_utils::convert_ov_state_to_inekf_state(ov_state_p);
+
+    std::cout << "dt: " << dt << std::endl;
+    std::cout << "imu measurement prev: " << imu_measurement_prev << std::endl;
 
         filter_p_->setState(robot_state);
-
         filter_p_->Propagate(imu_measurement_prev, dt);
 
-        // TODO(lowmanj): Update OV state with inekf State params
+        // Update OV state with inekf State params
         robot_state = filter_p_->getState();
-        conversion_utils::convert_inekf_state_to_ov_state(robot_state, ov_state_p);
+        conversion_utils::convert_inekf_state_to_ov_state(robot_state, state);
+
+        std::cout << " " << std::endl;
+        ROS_INFO("After InEKF prop: ");
+        print_current_state(state);
+
     // }
 
 
@@ -606,6 +645,8 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
         ROS_INFO("waiting for enough clone states (%d of %d) ....",(int)state->n_clones(),std::min(state->options().max_clone_size,5));
         return;
     }
+
+    ROS_INFO("Enough clone states!");
 
     // Return if we where unable to propagate
     if(state->timestamp() != timestamp) {
@@ -732,7 +773,7 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     rT4 =  boost::posix_time::microsec_clock::local_time();
 
 
-    // TODO(lowmanj): Call InEKF update here
+    // InEKF update using MSCKF Landmarks
     inekf::vectorLandmarks measured_landmarks = conversion_utils::convert_ov_features_to_landmarks(featsup_MSCKF);
     ROS_INFO("InEKF Correcting landmarks");
 
@@ -825,9 +866,6 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     ROS_INFO("q_GtoI = %.3f,%.3f,%.3f,%.3f | p_IinG = %.3f,%.3f,%.3f | dist = %.2f (meters)",
             state->imu()->quat()(0),state->imu()->quat()(1),state->imu()->quat()(2),state->imu()->quat()(3),
             state->imu()->pos()(0),state->imu()->pos()(1),state->imu()->pos()(2),distance);
-        // ROS_INFO("q_GtoI = %.3f,%.3f,%.3f,%.3f | p_IinG = %.3f,%.3f,%.3f | dist = %.2f (meters)",
-        //     state->imu()->quat()(0),state->imu()->quat()(1),state->imu()->quat()(2),state->imu()->quat()(3),
-        //     state->imu()->pos()(0),state->imu()->pos()(1),state->imu()->pos()(2),distance);
     ROS_INFO("bg = %.4f,%.4f,%.4f | ba = %.4f,%.4f,%.4f",
              state->imu()->bias_g()(0),state->imu()->bias_g()(1),state->imu()->bias_g()(2),
              state->imu()->bias_a()(0),state->imu()->bias_a()(1),state->imu()->bias_a()(2));
@@ -857,9 +895,6 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
                      calib->pos()(0),calib->pos()(1),calib->pos()(2));
         }
     }
-
-
-
 
 
 }
