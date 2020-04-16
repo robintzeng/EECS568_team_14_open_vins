@@ -25,6 +25,51 @@ using namespace ov_core;
 using namespace ov_msckf;
 
 
+// TODO(lowmanj): Complete this function and call it after propagating inekf state
+// The covariance needs to be considered
+ov_msckf::State* convert_inekf_state_to_ov_state(inekf::RobotState robot_state,
+                                                ov_msckf::State* ov_state){
+
+    auto v0 = robot_state.getVelocity();
+    auto p0 = robot_state.getPosition();
+    auto bg0 = robot_state.getGyroscopeBias();
+    auto ba0 = robot_state.getAccelerometerBias();
+    auto inekf_cov = robot_state.getP();
+
+    auto rquat = Eigen::Quaterniond(robot_state.getRotation());
+    Eigen::Vector4d quat0;
+    quat0 << rquat.x(), rquat.y(), rquat.z(), rquat.w();
+
+    Eigen::Matrix<double,16,1> new_value = ov_state->imu()->value();
+
+    // IMU pose is 3d quaternion, then 3d postiion
+    new_value.block(0, 0, 4, 1) << quat0;
+    new_value.block(4, 0, 3, 1) << p0;
+    new_value.block(7, 0, 3, 1) << v0;
+    new_value.block(10, 0, 3, 1) << bg0;
+    new_value.block(13, 0, 3, 1) << ba0;
+
+    ov_state->imu()->set_value(new_value);
+    ov_state->imu()->set_fej(new_value);
+
+    // TODO(lowmanj): How to set ov_state covariance from robot_state?
+    auto ov_cov = ov_state->Cov();
+    ov_cov.block<15, 15>(0, 0) = inekf_cov;
+
+
+    Eigen::VectorXd diags = ov_cov.diagonal();
+    for(int i=0; i<diags.rows(); i++) {
+        if (diags(i)<0.0){
+            std::cout << i << std::endl;
+        }
+
+        assert(diags(i)>=0.0);
+    }
+
+    ov_state->set_cov(ov_cov);
+
+    return ov_state;
+}
 
 
 void StateHelper::EKFUpdate(State *state, const std::vector<Type *> &H_order, const Eigen::MatrixXd &H,
@@ -84,9 +129,30 @@ void StateHelper::EKFUpdate(State *state, const std::vector<Type *> &H_order, co
     //Cov -= K * M_a.transpose();
     //Cov = 0.5*(Cov+Cov.transpose());
 
+    if (state->is_using_invariant){
+        // If we're using Invariant EKF, redo the correction step using inekf
+        // and overwrite the state covariance matrix
+
+        // InEKF update using MSCKF Landmarks
+        inekf::vectorLandmarks measured_landmarks = state->get_inekf_landmarks();
+        std::cout << "InEKF Correcting "<< measured_landmarks.size() <<" landmarks" << std::endl;
+        state->filter_p_->CorrectLandmarks(measured_landmarks);
+        std::cout << "Finished correcting landmarks" << std::endl;
+
+        auto robot_state = state->filter_p_->getState();
+        convert_inekf_state_to_ov_state(robot_state, state);
+
+        Cov = state->Cov();
+    }
+
+
     // We should check if we are not positive semi-definitate (i.e. negative diagionals is not s.p.d)
     Eigen::VectorXd diags = Cov.diagonal();
     for(int i=0; i<diags.rows(); i++) {
+
+        if (diags(i)<0.0){
+            std::cout << "Negative diag at index: "<< i << std::endl;
+        }
         assert(diags(i)>=0.0);
     }
 

@@ -21,9 +21,12 @@
 #ifndef OV_MSCKF_STATE_H
 #define OV_MSCKF_STATE_H
 
+#include "../../invariant-ekf/include/InEKF.h"
+#include "../../invariant-ekf/include/RobotState.h"
 
 #include <vector>
 #include <unordered_map>
+#include <memory>
 
 #include "types/Type.h"
 #include "types/IMU.h"
@@ -198,8 +201,24 @@ namespace ov_msckf {
 
         }
 
+        void initialize_filter(std::shared_ptr<inekf::InEKF> filter_p){
+            filter_p_ = filter_p;
+            is_using_invariant = true;
+        }
+
+        void update_inekf_landmarks(inekf::vectorLandmarks landmarks){
+            inekf_landmarks_ = landmarks;
+        }
+
+        inekf::vectorLandmarks get_inekf_landmarks() const{
+            return inekf_landmarks_;
+        }
 
     protected:
+
+        bool is_using_invariant {false};
+
+        inekf::vectorLandmarks inekf_landmarks_;
 
         /// Current timestamp (should be the last update time!)
         double _timestamp;
@@ -233,6 +252,8 @@ namespace ov_msckf {
 
         /// Vector of variables
         std::vector<Type*> _variables;
+
+        std::shared_ptr<inekf::InEKF> filter_p_;
 
 
     private:

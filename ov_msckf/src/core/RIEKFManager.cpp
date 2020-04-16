@@ -443,6 +443,7 @@ RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
 void RIEKFManager::initialize_filter(inekf::RobotState initial_state, inekf::NoiseParams noise_params){
     auto f = inekf::InEKF(initial_state, noise_params);
     filter_p_ = std::make_shared<inekf::InEKF>(f);
+    state->initialize_filter(filter_p_);
 }
 
 
@@ -618,24 +619,22 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
                        m_last.am[0], m_last.am[1], m_last.am[2];
 
     double dt = m_last.timestamp - m_2_last.timestamp;
-    // if (dt > DT_MIN && dt < DT_MAX) {
-        // Update filter_p state from OV state
 
+    // Update filter_p state from OV state
     std::cout << "dt: " << dt << std::endl;
     std::cout << "imu measurement prev: " << imu_measurement_prev << std::endl;
 
-        filter_p_->setState(robot_state);
-        filter_p_->Propagate(imu_measurement_prev, dt);
+    filter_p_->setState(robot_state);
+    filter_p_->Propagate(imu_measurement_prev, dt);
 
-        // Update OV state with inekf State params
-        robot_state = filter_p_->getState();
-        conversion_utils::convert_inekf_state_to_ov_state(robot_state, state);
+    // Update OV state with inekf State params
+    robot_state = filter_p_->getState();
+    conversion_utils::convert_inekf_state_to_ov_state(robot_state, state);
+    state->set_timestamp(timestamp);
 
-        std::cout << " " << std::endl;
-        ROS_INFO("After InEKF prop: ");
-        print_current_state(state);
-
-    // }
+    std::cout << " " << std::endl;
+    ROS_INFO("After InEKF prop: ");
+    print_current_state(state);
 
 
     // If we have not reached max clones, we should just return...
@@ -767,20 +766,18 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     // Now that we have a list of features, lets do the EKF update for MSCKF and SLAM!
     //===================================================================================
 
+    // Note: This is a hack to put the landmarks into the state. Then we can use
+    // the landmarks for an inekf update step instead of the normal EKF update
+    // when we call updaterMSCKF->update(state, featsup_MSCKF); below
+    // InEKF update using MSCKF Landmarks
+    inekf::vectorLandmarks measured_landmarks = conversion_utils::convert_ov_features_to_landmarks(featsup_MSCKF);
+    state->update_inekf_landmarks(measured_landmarks);
+
+
     // Pass them to our MSCKF updater
     // We update first so that our SLAM initialization will be more accurate??
     updaterMSCKF->update(state, featsup_MSCKF);
     rT4 =  boost::posix_time::microsec_clock::local_time();
-
-
-    // InEKF update using MSCKF Landmarks
-    inekf::vectorLandmarks measured_landmarks = conversion_utils::convert_ov_features_to_landmarks(featsup_MSCKF);
-    ROS_INFO("InEKF Correcting landmarks");
-
-    ROS_INFO("Number of measured landmarks: %d", measured_landmarks.size());
-
-    filter_p_->CorrectLandmarks(measured_landmarks);
-    ROS_INFO("Finished correcting landmarks");
 
 
     // Perform SLAM delay init and update

@@ -233,6 +233,4 @@ class RIEKFManager
         std::map<size_t,bool> camera_fisheye;
         std::map<size_t,Eigen::VectorXd> camera_calib;
         std::map<size_t,std::pair<int,int>> camera_wh;
-
-        inekf::RobotState state_;
 };

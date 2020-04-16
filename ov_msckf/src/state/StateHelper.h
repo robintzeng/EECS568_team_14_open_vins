@@ -21,6 +21,8 @@
 #ifndef OV_MSCKF_STATE_HELPER_H
 #define OV_MSCKF_STATE_HELPER_H
 
+#include "../../invariant-ekf/include/InEKF.h"
+#include "../../invariant-ekf/include/RobotState.h"
 
 #include "State.h"
 #include "types/Landmark.h"
