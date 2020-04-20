@@ -129,28 +129,28 @@ void StateHelper::EKFUpdate(State *state, const std::vector<Type *> &H_order, co
     //Cov -= K * M_a.transpose();
     //Cov = 0.5*(Cov+Cov.transpose());
 
-    if (state->is_using_invariant() == true){
-        // If we're using Invariant EKF, redo the correction step using inekf
-        // and overwrite the state covariance matrix
+    // if (state->is_using_invariant() == true){
+    //     // If we're using Invariant EKF, redo the correction step using inekf
+    //     // and overwrite the state covariance matrix
 
-        // InEKF update using MSCKF Landmarks
-        inekf::vectorLandmarks measured_landmarks = state->get_inekf_landmarks();
-        std::cout << "InEKF Correcting "<< measured_landmarks.size() <<" landmarks" << std::endl;
-        state->filter_p_->CorrectLandmarks(measured_landmarks);
-        std::cout << "Finished correcting landmarks" << std::endl;
+    //     // InEKF update using MSCKF Landmarks
+    //     inekf::vectorLandmarks measured_landmarks = state->get_inekf_landmarks();
+    //     std::cout << "InEKF Correcting "<< measured_landmarks.size() <<" landmarks" << std::endl;
+    //     state->filter_p_->CorrectLandmarks(measured_landmarks);
+    //     std::cout << "Finished correcting landmarks" << std::endl;
 
-        auto robot_state = state->filter_p_->getState();
+    //     auto robot_state = state->filter_p_->getState();
 
-        std::cout << "Finished getting state " << std::endl;
+    //     std::cout << "Finished getting state " << std::endl;
 
-        conversion_utils::convert_inekf_state_to_ov_state_helper(robot_state, state);
+    //     conversion_utils::convert_inekf_state_to_ov_state_helper(robot_state, state);
 
 
-        std::cout << "State cov rows:  "<< state->Cov().rows() <<" cols: " << state->Cov().cols() <<std::endl;
-        std::cout << "Cov rows:  "<< Cov.rows() <<" cols: " << Cov.cols() <<std::endl;
+    //     std::cout << "State cov rows:  "<< state->Cov().rows() <<" cols: " << state->Cov().cols() <<std::endl;
+    //     std::cout << "Cov rows:  "<< Cov.rows() <<" cols: " << Cov.cols() <<std::endl;
 
-        Cov = state->Cov();
-    }
+    //     Cov = state->Cov();
+    // }
 
 
     // We should check if we are not positive semi-definitate (i.e. negative diagionals is not s.p.d)
