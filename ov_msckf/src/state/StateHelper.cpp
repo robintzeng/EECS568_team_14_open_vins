@@ -19,16 +19,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include "StateHelper.h"
-
+// #include "../core/conversion_utils.h"
 
 using namespace ov_core;
 using namespace ov_msckf;
 
 
+namespace conversion_utils{
+
 // TODO(lowmanj): Complete this function and call it after propagating inekf state
 // The covariance needs to be considered
-ov_msckf::State* convert_inekf_state_to_ov_state(inekf::RobotState robot_state,
-                                                ov_msckf::State* ov_state){
+// Since OpenVINS state has poses, need to convert landmarks from InEKF to
+// camera quaternion and camera pose
+ov_msckf::State* convert_inekf_state_to_ov_state_helper(inekf::RobotState robot_state, ov_msckf::State* ov_state){
 
     auto v0 = robot_state.getVelocity();
     auto p0 = robot_state.getPosition();
@@ -49,26 +52,23 @@ ov_msckf::State* convert_inekf_state_to_ov_state(inekf::RobotState robot_state,
     new_value.block(10, 0, 3, 1) << bg0;
     new_value.block(13, 0, 3, 1) << ba0;
 
+    std::cout << "Setting imu new value " << std::endl;
+
     ov_state->imu()->set_value(new_value);
     ov_state->imu()->set_fej(new_value);
 
     // TODO(lowmanj): How to set ov_state covariance from robot_state?
-    auto ov_cov = ov_state->Cov();
-    ov_cov.block<15, 15>(0, 0) = inekf_cov;
+    // auto ov_cov = ov_state->Cov();
+    // std::cout << "Rows of ov_cov: " << ov_cov.rows() << " Cols: " << ov_cov.cols() << std::endl;
+    // std::cout << "Rows of inekf_cov: " << inekf_cov.rows() << " Cols: " << inekf_cov.cols() << std::endl;
+    // ov_cov.block<15, 15>(0, 0) = inekf_cov.block<15, 15>(0, 0);
 
-
-    Eigen::VectorXd diags = ov_cov.diagonal();
-    for(int i=0; i<diags.rows(); i++) {
-        if (diags(i)<0.0){
-            std::cout << i << std::endl;
-        }
-
-        assert(diags(i)>=0.0);
-    }
-
-    ov_state->set_cov(ov_cov);
+    // ov_state->set_cov(ov_cov);
 
     return ov_state;
+}
+
+
 }
 
 
@@ -129,7 +129,7 @@ void StateHelper::EKFUpdate(State *state, const std::vector<Type *> &H_order, co
     //Cov -= K * M_a.transpose();
     //Cov = 0.5*(Cov+Cov.transpose());
 
-    if (state->is_using_invariant){
+    if (state->is_using_invariant() == true){
         // If we're using Invariant EKF, redo the correction step using inekf
         // and overwrite the state covariance matrix
 
@@ -140,7 +140,14 @@ void StateHelper::EKFUpdate(State *state, const std::vector<Type *> &H_order, co
         std::cout << "Finished correcting landmarks" << std::endl;
 
         auto robot_state = state->filter_p_->getState();
-        convert_inekf_state_to_ov_state(robot_state, state);
+
+        std::cout << "Finished getting state " << std::endl;
+
+        conversion_utils::convert_inekf_state_to_ov_state_helper(robot_state, state);
+
+
+        std::cout << "State cov rows:  "<< state->Cov().rows() <<" cols: " << state->Cov().cols() <<std::endl;
+        std::cout << "Cov rows:  "<< Cov.rows() <<" cols: " << Cov.cols() <<std::endl;
 
         Cov = state->Cov();
     }

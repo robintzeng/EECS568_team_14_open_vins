@@ -116,9 +116,60 @@ namespace ov_msckf {
             return _options;
         }
 
+
+        void update_imu_from_filter(){
+            auto robot_state = filter_p_->getState();
+
+            auto v0 = robot_state.getVelocity();
+            auto p0 = robot_state.getPosition();
+            auto bg0 = robot_state.getGyroscopeBias();
+            auto ba0 = robot_state.getAccelerometerBias();
+            auto inekf_cov = robot_state.getP();
+
+            auto rquat = Eigen::Quaterniond(robot_state.getRotation());
+            Eigen::Vector4d quat0;
+            quat0 << rquat.x(), rquat.y(), rquat.z(), rquat.w();
+
+            Eigen::Matrix<double,16,1> new_value = _imu->value();
+
+            // IMU pose is 3d quaternion, then 3d postiion
+            new_value.block(0, 0, 4, 1) << quat0;
+            new_value.block(4, 0, 3, 1) << p0;
+            new_value.block(7, 0, 3, 1) << v0;
+            new_value.block(10, 0, 3, 1) << bg0;
+            new_value.block(13, 0, 3, 1) << ba0;
+
+            _imu->set_value(new_value);
+            _imu->set_fej(new_value);
+
+            return;
+        }
+
         /// Access to IMU type
         IMU* imu() {
+            if (is_using_invariant() == true){
+                update_imu_from_filter();
+            }
+
             return _imu;
+        }
+
+        inekf::RobotState get_filter_state_from_imu() {
+            inekf::RobotState robot_state;
+
+            Eigen::Vector3d p0 = imu()->pos();
+            Eigen::Vector3d v0 = imu()->vel();
+            Eigen::Matrix3d R0 = imu()->Rot();
+            Eigen::Vector3d ba0 = imu()->bias_a();
+            Eigen::Vector3d bg0 = imu()->bias_g();
+
+            robot_state.setRotation(R0);
+            robot_state.setVelocity(v0);
+            robot_state.setPosition(p0);
+            robot_state.setGyroscopeBias(bg0);
+            robot_state.setAccelerometerBias(ba0);
+
+            return robot_state;
         }
 
         /// Access covariance matrix
@@ -203,7 +254,7 @@ namespace ov_msckf {
 
         void initialize_filter(std::shared_ptr<inekf::InEKF> filter_p){
             filter_p_ = filter_p;
-            is_using_invariant = true;
+            _is_using_invariant = true;
         }
 
         void update_inekf_landmarks(inekf::vectorLandmarks landmarks){
@@ -214,9 +265,13 @@ namespace ov_msckf {
             return inekf_landmarks_;
         }
 
+        bool is_using_invariant() const{
+            return _is_using_invariant;
+        }
+
     protected:
 
-        bool is_using_invariant {false};
+        bool _is_using_invariant {false};
 
         inekf::vectorLandmarks inekf_landmarks_;
 
