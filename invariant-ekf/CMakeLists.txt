@@ -30,7 +30,7 @@ message("CMAKE_CXX_FLAGS: " ${CMAKE_CXX_FLAGS})
 unset(USE_CPP11)
 unset(USE_MUTEX)
 
-# Set the output folder where your program will be created  
+# Set the output folder where your program will be created
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 
@@ -47,7 +47,7 @@ find_package(Boost 1.57 REQUIRED COMPONENTS system)
 include_directories(${Boost_INCLUDE_DIR})
 message("Boost_INCLUDE_DIR: " ${Boost_INCLUDE_DIR})
 
-# Eigen 
+# Eigen
 find_package(Eigen3 REQUIRED)
 include_directories(${EIGEN3_INCLUDE_DIR})
 message("EIGEN3_INCLUDE_DIR: " ${EIGEN3_INCLUDE_DIR})
@@ -63,12 +63,10 @@ file(GLOB src_files
 link_directories(${PROJECT_SOURCE_DIR}/${Boost_LIBRARY_DIRS})
 
 add_executable(landmarks ${PROJECT_SOURCE_DIR}/src/examples/landmarks.cpp ${src_files})
-add_executable(kinematics ${PROJECT_SOURCE_DIR}/src/examples/kinematics.cpp ${src_files})
 add_executable(propagation_speed ${PROJECT_SOURCE_DIR}/src/tests/propagation_speed.cpp ${src_files})
 add_executable(correction_speed ${PROJECT_SOURCE_DIR}/src/tests/correction_speed.cpp ${src_files})
 
 target_link_libraries(landmarks ${Boost_LIBRARIES})
-target_link_libraries(kinematics ${Boost_LIBRARIES})
 target_link_libraries(propagation_speed ${Boost_LIBRARIES})
 target_link_libraries(correction_speed ${Boost_LIBRARIES})
 
@@ -86,11 +84,11 @@ set_target_properties(inekf PROPERTIES LIBRARY_OUTPUT_NAME inekf)
 #=============================================
 # to allow find_package() on inekf
 #=============================================
-# 
+#
 # the following case be used in an external project requiring inekf:
 #  ...
-#  find_package(inekf) 
-#  include_directories(${inekf_INCLUDE_DIRS}) 
+#  find_package(inekf)
+#  include_directories(${inekf_INCLUDE_DIRS})
 #  ...
 
 # NOTE: the following will support find_package for 1) local build (make) and 2) for installed files (make install)

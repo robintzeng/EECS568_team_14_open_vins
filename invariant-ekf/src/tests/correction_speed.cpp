@@ -47,7 +47,7 @@ int main() {
 
     ifstream infile("../src/data/correction_speed_test_data.txt");
     string line;
-    Eigen::Matrix<double,6,1> m, m_last; 
+    Eigen::Matrix<double,6,1> m, m_last;
     double t, t_last;
     m_last << 0,0,0,0,0,0;
     t_last = 0;
@@ -60,9 +60,9 @@ int main() {
         boost::split(measurement,line,boost::is_any_of(" "));
         // Handle measurements
         if (measurement[0].compare("IMU")==0){
-            t = stod98(measurement[1]); 
-            m << stod98(measurement[2]), 
-                 stod98(measurement[3]), 
+            t = stod98(measurement[1]);
+            m << stod98(measurement[2]),
+                 stod98(measurement[3]),
                  stod98(measurement[4]),
                  stod98(measurement[5]),
                  stod98(measurement[6]),
@@ -71,15 +71,15 @@ int main() {
 
         }
         else if (measurement[0].compare("LANDMARK")==0){
-            t = stod98(measurement[1]); 
+            t = stod98(measurement[1]);
             for (int i=2; i<measurement.size(); i+=4) {
                 int id = stod98(measurement[i]);
                 Eigen::Vector3d p_bl;
-                p_bl << stod98(measurement[i+1]), 
-                        stod98(measurement[i+2]), 
+                p_bl << stod98(measurement[i+1]),
+                        stod98(measurement[i+2]),
                         stod98(measurement[i+3]);
                 Landmark landmark(id, p_bl);
-                measured_landmarks.push_back(landmark); 
+                measured_landmarks.push_back(landmark);
             }
         }
     }
