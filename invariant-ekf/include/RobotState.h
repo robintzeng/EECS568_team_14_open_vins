@@ -42,6 +42,7 @@ class CameraPose{
         Eigen::MatrixXd getRotation() const{
             return R_;
         }
+
         Eigen::VectorXd getPosition() const{
             return pos_;
         }
@@ -90,6 +91,10 @@ class RobotState {
         void copyDiagX(int n, Eigen::MatrixXd& BigX);
 
         friend std::ostream& operator<<(std::ostream& os, const RobotState& s);
+
+        void augmentState(CameraPose cam_pose);
+        void updateCameraEstimate(const int cam_index, CameraPose cam_pose);
+        int getNumberCameras() const {return Cameras_.size();}
 
         std::vector<CameraPose> Cameras_;
 

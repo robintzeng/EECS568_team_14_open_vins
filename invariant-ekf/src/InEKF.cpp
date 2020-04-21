@@ -135,7 +135,9 @@ void InEKF::Propagate(const Eigen::Matrix<double,6,1>& m, double dt) {
     // return;
 
     // Noise terms
-    Eigen::MatrixXd Qk = Eigen::MatrixXd::Zero(dimP,dimP); // Landmark noise terms will remain zero
+    Eigen::MatrixXd Qk = Eigen::MatrixXd::Zero(dimP,dimP);
+
+    // Fill in top 15x15 of Qk with Q_dn
     Qk.block<3,3>(0,0) = noise_params_.getGyroscopeCov();
     Qk.block<3,3>(3,3) = noise_params_.getAccelerometerCov();
     // for(map<int,int>::iterator it=estimated_contact_positions_.begin(); it!=estimated_contact_positions_.end(); ++it) {
@@ -200,7 +202,7 @@ void InEKF::PropagateCameras(const Eigen::Matrix<double,6,1>& m, double dt) {
         cam_i.setRotation(new_R_i);
         cam_i.setPosition(new_pos_i);
 
-        state_.Cameras_[ind] = cam_i;
+        state_.updateCameraEstimate(ind, cam_i);
     }
 
 }

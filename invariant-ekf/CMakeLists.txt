@@ -65,10 +65,12 @@ link_directories(${PROJECT_SOURCE_DIR}/${Boost_LIBRARY_DIRS})
 add_executable(landmarks ${PROJECT_SOURCE_DIR}/src/examples/landmarks.cpp ${src_files})
 add_executable(propagation_speed ${PROJECT_SOURCE_DIR}/src/tests/propagation_speed.cpp ${src_files})
 add_executable(correction_speed ${PROJECT_SOURCE_DIR}/src/tests/correction_speed.cpp ${src_files})
+add_executable(test_msckf ${PROJECT_SOURCE_DIR}/src/tests/test_msckf.cpp ${src_files})
 
 target_link_libraries(landmarks ${Boost_LIBRARIES})
 target_link_libraries(propagation_speed ${Boost_LIBRARIES})
 target_link_libraries(correction_speed ${Boost_LIBRARIES})
+target_link_libraries(test_msckf ${Boost_LIBRARIES})
 
 # Create Library
 add_library(inekf SHARED
