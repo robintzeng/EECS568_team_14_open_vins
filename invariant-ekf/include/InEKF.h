@@ -87,6 +87,7 @@ class InEKF {
 
         void Propagate(const Eigen::Matrix<double,6,1>& m, double dt);
         void PropagateIMU(const Eigen::Matrix<double,6,1>& m, double dt);
+        void PropagateCovariance(const Eigen::Matrix<double,6,1>& m, double dt);
         void PropagateCameras(const Eigen::Matrix<double,6,1>& m, double dt);
         void Correct(const Observation& obs);
         void CorrectLandmarks(const vectorLandmarks& measured_landmarks);

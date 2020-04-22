@@ -89,76 +89,11 @@ map<int,int> InEKF::getEstimatedLandmarks() {
 
 // InEKF Propagation - Inertial Data
 void InEKF::Propagate(const Eigen::Matrix<double,6,1>& m, double dt) {
-
     PropagateIMU(m, dt);
 
     PropagateCameras(m, dt);
 
-    auto X = state_.getX();
-    Eigen::Matrix3d R = state_.getRotation();
-
-
-    /// Now for the covariance
-    int dimP = state_.dimP();
-    Eigen::MatrixXd P = state_.getP();
-
-   // ---- Linearized invariant error dynamics -----
-    int dimX = state_.dimX();
-    int dimTheta = state_.dimTheta();
-
-    Eigen::MatrixXd A = Eigen::MatrixXd::Zero(dimP,dimP);
-    // Inertial terms (called F in RI-MSCKF paper)
-    A.block<3,3>(3,0) = skew(g_); // TODO: Efficiency could be improved by not computing the constant terms every time
-    A.block<3,3>(6,3) = Eigen::Matrix3d::Identity();
-    // Bias terms
-    A.block<3,3>(0,dimP-dimTheta) = -R;
-    A.block<3,3>(3,dimP-dimTheta+3) = -R;
-    for (int i=3; i<dimX; ++i) {
-        A.block<3,3>(3*i-6,dimP-dimTheta) = -skew(X.block<3,1>(0,i))*R;
-    }
-
-    Eigen::MatrixXd I = Eigen::MatrixXd::Identity(dimP,dimP);
-    Eigen::MatrixXd Phi_n = I + A*dt; // Fast approximation of exp(A*dt). TODO: explore using the full exp() instead
-
-    // // P_new = Phi * P * Phi.transpose() + Q
-    Eigen::MatrixXd Phi = I + A*dt;
-    // Phi.block<15, 15>(0, 0) = Phi_n;
-
-    // Eigen::MatrixXd Qk_hat = Eigen::MatrixXd::Zero(dimP, dimP);
-    // Q.block<15, 15>(0, 0) = Q_d;
-
-    // Eigen::MatrixXd P_pred = Phi * P * Phi.transpose() + Qk_hat;
-
-    // // Set new covariance
-    // state_.setP(P_pred);
-
-    // return;
-
-    // Noise terms
-    Eigen::MatrixXd Qk = Eigen::MatrixXd::Zero(dimP,dimP);
-
-    // Fill in top 15x15 of Qk with Q_dn
-    Qk.block<3,3>(0,0) = noise_params_.getGyroscopeCov();
-    Qk.block<3,3>(3,3) = noise_params_.getAccelerometerCov();
-    // for(map<int,int>::iterator it=estimated_contact_positions_.begin(); it!=estimated_contact_positions_.end(); ++it) {
-    //     Qk.block<3,3>(3+3*(it->second-3),3+3*(it->second-3)) = noise_params_.getContactCov(); // Contact noise terms
-    // }
-    Qk.block<3,3>(dimP-dimTheta,dimP-dimTheta) = noise_params_.getGyroscopeBiasCov();
-    Qk.block<3,3>(dimP-dimTheta+3,dimP-dimTheta+3) = noise_params_.getAccelerometerBiasCov();
-
-    // Discretization
-    Eigen::MatrixXd Adj = I;
-    Adj.block(0,0,dimP-dimTheta,dimP-dimTheta) = Adjoint_SEK3(X); // Approx 200 microseconds
-    Eigen::MatrixXd PhiAdj = Phi * Adj;
-    Eigen::MatrixXd Qk_hat = PhiAdj * Qk * PhiAdj.transpose() * dt; // Approximated discretized noise matrix (faster by 400 microseconds)
-
-    // Propagate Covariance
-    Eigen::MatrixXd P_pred = Phi * P * Phi.transpose() + Qk_hat;
-
-    // Set new covariance
-    state_.setP(P_pred);
-
-    return;
+    PropagateCovariance(m, dt);
 }
 
 // IMU Propagation: X_imu (+) e_I
@@ -196,8 +131,8 @@ void InEKF::PropagateCameras(const Eigen::Matrix<double,6,1>& m, double dt) {
         auto R_i = cam_i.getRotation();
         auto pos_i = cam_i.getPosition();
 
-        Eigen::MatrixXd new_R_i = Exp_SO3(e_theta) * R_i;
-        Eigen::VectorXd new_pos_i = Exp_SO3(e_theta) * pos_i + Exp_SEK3(-m)*e_p;
+        Eigen::Matrix3d new_R_i = Exp_SO3(e_theta) * R_i;
+        Eigen::Vector3d new_pos_i = Exp_SO3(e_theta) * pos_i + Exp_SEK3(-m)*e_p;
 
         cam_i.setRotation(new_R_i);
         cam_i.setPosition(new_pos_i);
@@ -206,6 +141,66 @@ void InEKF::PropagateCameras(const Eigen::Matrix<double,6,1>& m, double dt) {
     }
 
 }
+
+
+void InEKF::PropagateCovariance(const Eigen::Matrix<double,6,1>& m, double dt){
+    Eigen::Vector3d w = m.head(3) - state_.getGyroscopeBias();    // Angular Velocity
+    Eigen::Vector3d a = m.tail(3) - state_.getAccelerometerBias(); // Linear Acceleration
+
+    int dimP = state_.dimP();
+    auto num_landmarks = state_.getNumberCameras();
+    auto R = state_.getRotation();
+    auto p = state_.getPosition();
+    auto v = state_.getVelocity();
+
+    Eigen::MatrixXd A = Eigen::MatrixXd::Zero(dimP, dimP);
+    assert(dimP >=18);
+    A.block<3, 3>(3, 0) = skew(g_);
+    A.block<3, 3>(6, 3) = Eigen::Matrix3d::Identity();
+
+    A.block<3, 3>(0, 12) = -R;
+    A.block<3, 3>(3, 12) = -skew(v) * R;
+    A.block<3, 3>(6, 12) = -skew(p) * R;
+    A.block<3, 3>(3, 15) = -R;
+
+    // A.block<dimP-12, dimP-12>(12, 12) = Eigen::MatrixXd::Identity(dimP-12, dimP-12);
+
+    Eigen::MatrixXd I = Eigen::MatrixXd::Identity(dimP, dimP);
+    Eigen::MatrixXd Phi = I + A * dt;
+
+    Eigen::MatrixXd adj = Eigen::MatrixXd::Zero(dimP, dimP);
+    adj.block<3, 3>(0, 0) = R;
+    adj.block<3, 3>(3, 3) = R;
+    adj.block<3, 3>(6, 6) = R;
+    adj.block<3, 3>(3, 0) = skew(v) * R;
+    adj.block<3, 3>(6, 0) = skew(p) * R;
+
+    for (int diag_ind=15; diag_ind < dimP; diag_ind += 6){
+        int cam_index = (diag_ind-15) / 6;
+        assert(cam_index < state_.getNumberCameras());
+
+        auto cam = state_.getCameraEstimate(cam_index);
+
+        adj.block<3, 3>(diag_ind, diag_ind) = cam.getRotation();
+        adj.block<3, 3>(diag_ind+3, diag_ind+3) = cam.getRotation();
+        adj.block<3, 3>(diag_ind+3, diag_ind) = skew(cam.getPosition()) * cam.getRotation();
+
+    }
+
+    Eigen::MatrixXd Qk = Eigen::MatrixXd::Zero(dimP,dimP);
+
+    // Fill in top 15x15 of Qk with Q_dn
+    Qk.block<3,3>(0,0) = noise_params_.getGyroscopeCov();
+    Qk.block<3,3>(3,3) = noise_params_.getAccelerometerCov();
+
+    Eigen::MatrixXd Qk_hat = adj * Qk * adj.transpose();
+
+    Eigen::MatrixXd P_pred = Phi * state_.getP() * Phi.transpose() + Qk_hat;
+    state_.setP(P_pred);
+
+    return;
+}
+
 
 // Correct State: Right-Invariant Observation
 void InEKF::Correct(const Observation& obs) {

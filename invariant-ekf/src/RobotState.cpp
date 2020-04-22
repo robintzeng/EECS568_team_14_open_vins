@@ -257,5 +257,9 @@ void RobotState::updateCameraEstimate(const int cam_index, CameraPose cam_pose){
     return;
 }
 
+CameraPose RobotState::getCameraEstimate(const int cam_index){
+    return Cameras_[cam_index];
+}
+
 
 } // end inekf namespace

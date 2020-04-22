@@ -94,6 +94,7 @@ class RobotState {
 
         void augmentState(CameraPose cam_pose);
         void updateCameraEstimate(const int cam_index, CameraPose cam_pose);
+        CameraPose getCameraEstimate(const int cam_index);
         int getNumberCameras() const {return Cameras_.size();}
 
         std::vector<CameraPose> Cameras_;
