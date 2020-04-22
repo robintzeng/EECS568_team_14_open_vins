@@ -91,6 +91,7 @@ class InEKF {
         void PropagateCameras(const Eigen::Matrix<double,6,1>& m, double dt);
         void Correct(const Observation& obs);
         void CorrectLandmarks(const vectorLandmarks& measured_landmarks);
+        void CorrectCameras();
 
     private:
         RobotState state_;

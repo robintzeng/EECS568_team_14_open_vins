@@ -94,6 +94,25 @@ int test_propagate(){
     return 0;
 }
 
+int test_position_covariance(){
+    cout << "__________________________________________________________" << endl;
+    cout << "testing position covariance " << endl;
+
+    InEKF filter;
+
+    Eigen::Matrix<double,6,1> m = Eigen::MatrixXd::Zero(6, 1);
+    m[3] = 1.0;
+    double dt = 0.1;
+
+    cout << "Position Before Prop: \n" << filter.getState().getPosition() << endl;
+    cout << "Cov(Pos) Before Prop: \n" << filter.getState().getP().block<3, 3>(4, 4) << endl;
+    filter.Propagate(m, dt);
+    cout << "Position After Prop: \n" << filter.getState().getPosition() << endl;
+    cout << "Cov(Pos) After Prop: \n" << filter.getState().getP().block<3, 3>(4, 4) << endl;
+
+    return 0;
+}
+
 
 int main() {
     cout << "Testing" << endl;
@@ -101,6 +120,8 @@ int main() {
     test_cam_pose();
 
     test_propagate();
+
+    test_position_covariance();
 
     return 0;
 }

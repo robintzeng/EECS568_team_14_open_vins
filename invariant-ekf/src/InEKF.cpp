@@ -17,6 +17,20 @@ namespace inekf {
 
 using namespace std;
 
+Eigen::MatrixXd J_r(Eigen::MatrixXd y){
+    Eigen::MatrixXd I = Eigen::Matrix3d::Identity(y.rows(), y.rows());
+    double norm = y.norm();
+    double norm2 = norm * norm;
+    double norm3 = norm2 * norm;
+    Eigen::MatrixXd Sy = skew(y);
+
+    Eigen::MatrixXd result;
+
+    result = I - (1 - cos(norm)) * Sy/norm2 + (norm - sin(norm)) * Sy * Sy / norm3;
+
+    return result;
+}
+
 void removeRowAndColumn(Eigen::MatrixXd& M, int index);
 
 // ------------ Observation -------------
@@ -111,7 +125,7 @@ void InEKF::PropagateIMU(const Eigen::Matrix<double,6,1>& m, double dt) {
 
     // Strapdown IMU motion model
     Eigen::Vector3d phi = w*dt;
-    Eigen::Matrix3d R_pred = R * Exp_SO3(phi);
+    Eigen::Matrix3d R_pred = R * Exp_SO3(phi); // TODO(lowmanj) RIght or left multiply?
     Eigen::Vector3d v_pred = v + (R*a + g_)*dt;
     Eigen::Vector3d p_pred = p + v*dt + 0.5*(R*a + g_)*dt*dt;
 
@@ -123,16 +137,19 @@ void InEKF::PropagateIMU(const Eigen::Matrix<double,6,1>& m, double dt) {
 
 // Cam Propagation: C_i (+) e_theta
 void InEKF::PropagateCameras(const Eigen::Matrix<double,6,1>& m, double dt) {
-    Eigen::Vector3d e_theta = m.head(3) - state_.getGyroscopeBias();
-    Eigen::Vector3d e_p = m.tail(3) - state_.getAccelerometerBias();
+    Eigen::Vector3d w = m.head(3) - state_.getGyroscopeBias();
+    Eigen::Vector3d a = m.tail(3) - state_.getAccelerometerBias();
+
+    Eigen::Vector3d e_theta = w * dt;
+    Eigen::Vector3d e_p = a * dt * dt;
 
     for (int ind=0; ind < state_.Cameras_.size(); ind++){
         auto cam_i = state_.Cameras_[ind];
         auto R_i = cam_i.getRotation();
         auto pos_i = cam_i.getPosition();
 
-        Eigen::Matrix3d new_R_i = Exp_SO3(e_theta) * R_i;
-        Eigen::Vector3d new_pos_i = Exp_SO3(e_theta) * pos_i + Exp_SEK3(-m)*e_p;
+        Eigen::Matrix3d new_R_i = Exp_SO3(e_theta) * R_i; // TODO(lowmanj) RIght or left multiply?
+        Eigen::Vector3d new_pos_i = Exp_SO3(e_theta) * pos_i + R_i * e_p; // TODO(lowmanj) + R*e_p or + J_r(m)*e_p?
 
         cam_i.setRotation(new_R_i);
         cam_i.setPosition(new_pos_i);
@@ -143,27 +160,41 @@ void InEKF::PropagateCameras(const Eigen::Matrix<double,6,1>& m, double dt) {
 }
 
 
+// Eigen::MatrixXd Adjoint_SEK3(const Eigen::MatrixXd& X) {
+//     // Compute Adjoint(X) for X in SE_K(3)
+//     int K = X.cols()-3;
+//     Eigen::MatrixXd Adj = Eigen::MatrixXd::Zero(3+3*K, 3+3*K);
+//     Eigen::Matrix3d R = X.block<3,3>(0,0);
+//     Adj.block<3,3>(0,0) = R;
+//     for (int i=0; i<K; ++i) {
+//         Adj.block<3,3>(3+3*i,3+3*i) = R;
+//         Adj.block<3,3>(3+3*i,0) = skew(X.block<3,1>(0,3+i))*R;
+//     }
+//     return Adj;
+// }
+
 void InEKF::PropagateCovariance(const Eigen::Matrix<double,6,1>& m, double dt){
     Eigen::Vector3d w = m.head(3) - state_.getGyroscopeBias();    // Angular Velocity
     Eigen::Vector3d a = m.tail(3) - state_.getAccelerometerBias(); // Linear Acceleration
 
     int dimP = state_.dimP();
+    int dimTheta = state_.dimTheta();
     auto num_landmarks = state_.getNumberCameras();
     auto R = state_.getRotation();
     auto p = state_.getPosition();
     auto v = state_.getVelocity();
 
     Eigen::MatrixXd A = Eigen::MatrixXd::Zero(dimP, dimP);
-    assert(dimP >=18);
     A.block<3, 3>(3, 0) = skew(g_);
     A.block<3, 3>(6, 3) = Eigen::Matrix3d::Identity();
 
-    A.block<3, 3>(0, 12) = -R;
-    A.block<3, 3>(3, 12) = -skew(v) * R;
-    A.block<3, 3>(6, 12) = -skew(p) * R;
-    A.block<3, 3>(3, 15) = -R;
+    A.block<3, 3>(0, dimP-dimTheta) = -R;
+    A.block<3, 3>(3, dimP-dimTheta + 3) = -R;
 
-    // A.block<dimP-12, dimP-12>(12, 12) = Eigen::MatrixXd::Identity(dimP-12, dimP-12);
+    // A.block<3, 3>(3, 12) = -skew(v) * R;
+    // A.block<3, 3>(6, 12) = -skew(p) * R;
+
+    // TODO(lowmanj) Does there need to be a -skew(camera_pos)*R in here somewhere?
 
     Eigen::MatrixXd I = Eigen::MatrixXd::Identity(dimP, dimP);
     Eigen::MatrixXd Phi = I + A * dt;
@@ -172,12 +203,14 @@ void InEKF::PropagateCovariance(const Eigen::Matrix<double,6,1>& m, double dt){
     adj.block<3, 3>(0, 0) = R;
     adj.block<3, 3>(3, 3) = R;
     adj.block<3, 3>(6, 6) = R;
+    adj.block<3, 3>(9, 9) = R;
     adj.block<3, 3>(3, 0) = skew(v) * R;
     adj.block<3, 3>(6, 0) = skew(p) * R;
 
-    for (int diag_ind=15; diag_ind < dimP; diag_ind += 6){
-        int cam_index = (diag_ind-15) / 6;
-        assert(cam_index < state_.getNumberCameras());
+    for (int cam_index = 0; cam_index < num_landmarks; cam_index++){
+        int diag_ind = 15 + 6*cam_index;
+        assert(diag_ind < adj.rows());
+        assert(diag_ind < adj.cols());
 
         auto cam = state_.getCameraEstimate(cam_index);
 
@@ -186,6 +219,12 @@ void InEKF::PropagateCovariance(const Eigen::Matrix<double,6,1>& m, double dt){
         adj.block<3, 3>(diag_ind+3, diag_ind) = skew(cam.getPosition()) * cam.getRotation();
 
     }
+
+    // Eigen::MatrixXd B = Eigen::MatrixXd::Zero(6 + 3*num_landmarks, 6);
+    // B.block<3, 3>(0, 0) = -J_r(-w);
+    // B.block<3, 3>(3, 0) = -skew(v) * J_r(-w);
+    // B.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity();
+    // Eigen::MatrixXd G = adj*B;
 
     Eigen::MatrixXd Qk = Eigen::MatrixXd::Zero(dimP,dimP);
 
@@ -236,6 +275,83 @@ void InEKF::Correct(const Observation& obs) {
 
     state_.setP(P_new);
 }
+
+// Create Observation from vector of landmark measurements
+void InEKF::CorrectCameras() {
+
+    Eigen::VectorXd Y;
+    Eigen::VectorXd b;
+    Eigen::MatrixXd N;
+    Eigen::MatrixXd PI;
+
+    double n_cams = state_.getNumberCameras();
+    double H_num_cols = 9*n_cams + 15;
+
+    Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3*n_cams, H_num_cols);
+    std::vector<CameraPose> cameras = state_.getCameras();
+
+    int cam_ind = 0;
+    for (auto camera: cameras){
+        Eigen::MatrixXd A = Eigen::MatrixXd::Zero(3, 6);
+        Eigen::MatrixXd B = Eigen::MatrixXd::Zero(3, 6);
+
+        H.block<3, 6>(3*cam_ind, 15 + 9*cam_ind) = A;
+        H.block<3, 6>(3*cam_ind, 15 + 9*cam_ind) = B;
+
+        cam_ind ++;
+    }
+
+    std::cout << "Correcting state using stacked observations" << std::endl;
+    // Correct state using stacked observation
+    Observation obs(Y,b,H,N,PI);
+    if (!obs.empty()) {
+        this->Correct(obs);
+    }
+
+    // // We don't need to augment state with landmarks because this is
+    // // handles by the MSCKF
+    // std::cout << "Updating estimated landmarks" << std::endl;
+    // int startIndex = state_.getX().rows();
+    // for (vectorLandmarksIterator it=new_landmarks.begin(); it!=new_landmarks.end(); ++it) {
+    //     startIndex++;
+    //     estimated_landmarks_.insert(pair<int,int> (it->id, startIndex));
+    // }
+
+    // std::cout << "Augmenting state with new landmarks" << std::endl;
+    // // Augment state with newly detected landmarks
+    // if (new_landmarks.size() > 0) {
+    //     Eigen::MatrixXd X_aug = state_.getX();
+    //     Eigen::MatrixXd P_aug = state_.getP();
+    //     Eigen::Vector3d p = state_.getPosition();
+    //     for (vectorLandmarksIterator it=new_landmarks.begin(); it!=new_landmarks.end(); ++it) {
+    //         // Initialize new landmark mean
+    //         int startIndex = X_aug.rows();
+    //         X_aug.conservativeResize(startIndex+1, startIndex+1);
+    //         X_aug.block(startIndex,0,1,startIndex) = Eigen::MatrixXd::Zero(1,startIndex);
+    //         X_aug.block(0,startIndex,startIndex,1) = Eigen::MatrixXd::Zero(startIndex,1);
+    //         X_aug(startIndex, startIndex) = 1;
+    //         X_aug.block(0,startIndex,3,1) = p + R*it->position;
+
+    //         // Initialize new landmark covariance - TODO:speed up
+    //         Eigen::MatrixXd F = Eigen::MatrixXd::Zero(state_.dimP()+3,state_.dimP());
+    //         F.block(0,0,state_.dimP()-state_.dimTheta(),state_.dimP()-state_.dimTheta()) = Eigen::MatrixXd::Identity(state_.dimP()-state_.dimTheta(),state_.dimP()-state_.dimTheta()); // for old X
+    //         F.block(state_.dimP()-state_.dimTheta(),6,3,3) = Eigen::Matrix3d::Identity(); // for new landmark
+    //         F.block(state_.dimP()-state_.dimTheta()+3,state_.dimP()-state_.dimTheta(),state_.dimTheta(),state_.dimTheta()) = Eigen::MatrixXd::Identity(state_.dimTheta(),state_.dimTheta()); // for theta
+    //         Eigen::MatrixXd G = Eigen::MatrixXd::Zero(F.rows(),3);
+    //         G.block(G.rows()-state_.dimTheta()-3,0,3,3) = R;
+    //         P_aug = (F*P_aug*F.transpose() + G*noise_params_.getLandmarkCov()*G.transpose()).eval();
+
+    //         // Update state and covariance
+    //         state_.setX(X_aug);
+    //         state_.setP(P_aug);
+
+    //         // Add to list of estimated landmarks
+    //         estimated_landmarks_.insert(pair<int,int> (it->id, startIndex));
+    //     }
+    // }
+    return;
+}
+
 
 // Create Observation from vector of landmark measurements
 void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {

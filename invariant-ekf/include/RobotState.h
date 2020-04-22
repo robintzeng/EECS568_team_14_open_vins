@@ -97,6 +97,7 @@ class RobotState {
         CameraPose getCameraEstimate(const int cam_index);
         int getNumberCameras() const {return Cameras_.size();}
 
+        std::vector<CameraPose> getCameras() {return Cameras_;}
         std::vector<CameraPose> Cameras_;
 
     private:
