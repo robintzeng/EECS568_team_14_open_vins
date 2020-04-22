@@ -355,7 +355,7 @@ RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
     updaterMSCKF = new UpdaterMSCKF(msckf_options, featinit_options);
     updaterSLAM = new UpdaterSLAM(slam_options, aruco_options, featinit_options);
 
-
+    // 
     inekf::RobotState initial_robot_state = state->get_filter_state_from_imu();
     // inekf::RobotState initial_robot_state = conversion_utils::convert_ov_state_to_inekf_state(ov_state_p);
 

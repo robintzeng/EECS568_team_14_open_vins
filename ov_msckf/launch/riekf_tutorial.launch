@@ -8,7 +8,7 @@
         <param name="topic_camera1"  type="string" value="/cam1/image_raw" />
 
         <!-- bag parameters -->
-        <param name="path_bag"    type="string" value="/home/lowmanj/datasets/eth/V1_01_easy.bag" />
+        <param name="path_bag"    type="string" value="/home/robin/vin_data/V1_01_easy.bag" />
         <param name="bag_start"   type="int"    value="0" />
         <param name="bag_durr"    type="int"    value="-1" />
 
