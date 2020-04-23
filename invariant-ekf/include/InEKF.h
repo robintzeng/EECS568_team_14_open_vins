@@ -22,6 +22,9 @@
 #include "NoiseParams.h"
 #include "LieGroup.h"
 
+#include "../../ov_core/src/feat/Feature.h"
+
+
 namespace inekf {
 
 class Kinematics {
@@ -91,7 +94,7 @@ class InEKF {
         void PropagateCameras(const Eigen::Matrix<double,6,1>& m, double dt);
         void Correct(const Observation& obs);
         void CorrectLandmarks(const vectorLandmarks& measured_landmarks);
-        void CorrectCameras();
+        void CorrectFeatures(std::vector<ov_core::Feature*> featsup_MSCKF);
 
     private:
         RobotState state_;

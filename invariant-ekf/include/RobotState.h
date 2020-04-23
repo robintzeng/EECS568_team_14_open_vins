@@ -51,6 +51,33 @@ class CameraPose{
         Eigen::VectorXd pos_;
 };
 
+
+
+class VisualFeature
+{
+public:
+    VisualFeature();
+    VisualFeature(const VisualFeature& orig);
+
+    ~VisualFeature(){}
+
+    Eigen::Vector3d getPosition() const;
+
+    void setPosition(Eigen::Vector3d new_pos);
+
+    std::vector<CameraPose> poses_seen_from_;
+
+    VisualFeature& operator=(const VisualFeature& orig);
+    int id_;
+
+protected:
+    static int nextID;
+
+private:
+    Eigen::Vector3d pos_;
+};
+
+
 class RobotState {
 
     public:

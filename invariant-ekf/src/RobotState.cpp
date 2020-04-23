@@ -18,6 +18,29 @@ namespace inekf {
 
 using namespace std;
 
+int VisualFeature::nextID = 0;
+
+VisualFeature::VisualFeature(){
+    id_ = ++nextID;
+}
+
+VisualFeature::VisualFeature(const VisualFeature& orig){
+   id_ = orig.id_;
+}
+
+Eigen::Vector3d VisualFeature::getPosition() const {
+    return pos_;
+}
+
+void VisualFeature::setPosition(Eigen::Vector3d new_pos){
+    pos_ = new_pos;
+}
+
+VisualFeature& VisualFeature::operator=(const VisualFeature& orig){
+   id_ = orig.id_;
+   return(*this);
+}
+
 // Default constructor
 RobotState::RobotState() :
     X_(Eigen::MatrixXd::Identity(5,5)), Theta_(Eigen::MatrixXd::Zero(6,1)), P_(Eigen::MatrixXd::Identity(15,15)) {}

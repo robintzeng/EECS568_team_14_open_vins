@@ -113,6 +113,16 @@ int test_position_covariance(){
     return 0;
 }
 
+int test_visual_features(){
+    VisualFeature f1;
+    VisualFeature f2;
+
+    cout << "F1 id: " << f1.id_ << endl;
+    cout << "F2 id: " << f2.id_ << endl;
+
+    return 0;
+}
+
 
 int main() {
     cout << "Testing" << endl;
@@ -122,6 +132,8 @@ int main() {
     test_propagate();
 
     test_position_covariance();
+
+    test_visual_features();
 
     return 0;
 }

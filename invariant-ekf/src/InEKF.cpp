@@ -277,23 +277,28 @@ void InEKF::Correct(const Observation& obs) {
 }
 
 // Create Observation from vector of landmark measurements
-void InEKF::CorrectCameras() {
+void InEKF::CorrectFeatures(std::vector<ov_core::Feature*> featsup_MSCKF) {
 
     Eigen::VectorXd Y;
     Eigen::VectorXd b;
     Eigen::MatrixXd N;
     Eigen::MatrixXd PI;
 
+    double dimP = state_.dimP();
     double n_cams = state_.getNumberCameras();
     double H_num_cols = 9*n_cams + 15;
 
-    Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3*n_cams, H_num_cols);
+    Eigen::MatrixXd H;
+    Eigen::MatrixXd Hx = Eigen::MatrixXd::Zero(dimP, dimP);
+    Eigen::MatrixXd Hf = Eigen::MatrixXd::Zero(dimP, dimP);
     std::vector<CameraPose> cameras = state_.getCameras();
 
     int cam_ind = 0;
-    for (auto camera: cameras){
+    for (auto feature_p: featsup_MSCKF){
         Eigen::MatrixXd A = Eigen::MatrixXd::Zero(3, 6);
         Eigen::MatrixXd B = Eigen::MatrixXd::Zero(3, 6);
+
+        A.block<3, 3>(0, 0) = - camera.getRotation() * skew(camera.getPosition());
 
         H.block<3, 6>(3*cam_ind, 15 + 9*cam_ind) = A;
         H.block<3, 6>(3*cam_ind, 15 + 9*cam_ind) = B;
@@ -301,12 +306,12 @@ void InEKF::CorrectCameras() {
         cam_ind ++;
     }
 
-    std::cout << "Correcting state using stacked observations" << std::endl;
-    // Correct state using stacked observation
-    Observation obs(Y,b,H,N,PI);
-    if (!obs.empty()) {
-        this->Correct(obs);
-    }
+    // std::cout << "Correcting state using stacked observations" << std::endl;
+    // // Correct state using stacked observation
+    // Observation obs(Y,b,H,N,PI);
+    // if (!obs.empty()) {
+    //     this->Correct(obs);
+    // }
 
     // // We don't need to augment state with landmarks because this is
     // // handles by the MSCKF
