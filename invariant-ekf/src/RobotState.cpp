@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------------
  * Copyright 2018, Ross Hartley <m.ross.hartley@gmail.com>
- * All Rights Reserved
+ * All Rights Reserved 
  * See LICENSE for the license information
  * -------------------------------------------------------------------------- */
 
@@ -19,20 +19,20 @@ namespace inekf {
 using namespace std;
 
 // Default constructor
-RobotState::RobotState() :
+RobotState::RobotState() : 
     X_(Eigen::MatrixXd::Identity(5,5)), Theta_(Eigen::MatrixXd::Zero(6,1)), P_(Eigen::MatrixXd::Identity(15,15)) {}
 // Initialize with X
-RobotState::RobotState(const Eigen::MatrixXd& X) :
+RobotState::RobotState(const Eigen::MatrixXd& X) : 
     X_(X), Theta_(Eigen::MatrixXd::Zero(6,1)) {
     P_ = Eigen::MatrixXd::Identity(3*this->dimX()+this->dimTheta()-6, 3*this->dimX()+this->dimTheta()-6);
 }
 // Initialize with X and Theta
-RobotState::RobotState(const Eigen::MatrixXd& X, const Eigen::VectorXd& Theta) :
+RobotState::RobotState(const Eigen::MatrixXd& X, const Eigen::VectorXd& Theta) : 
     X_(X), Theta_(Theta) {
     P_ = Eigen::MatrixXd::Identity(3*this->dimX()+this->dimTheta()-6, 3*this->dimX()+this->dimTheta()-6);
 }
 // Initialize with X, Theta and P
-RobotState::RobotState(const Eigen::MatrixXd& X, const Eigen::VectorXd& Theta, const Eigen::MatrixXd& P) :
+RobotState::RobotState(const Eigen::MatrixXd& X, const Eigen::VectorXd& Theta, const Eigen::MatrixXd& P) : 
     X_(X), Theta_(Theta), P_(P) {}
 // TODO: error checking to make sure dimensions are correct and supported
 
@@ -76,59 +76,59 @@ RobotState& RobotState::operator = (const RobotState& other) {
 #endif
 
 
-const Eigen::MatrixXd RobotState::getX() {
+const Eigen::MatrixXd RobotState::getX() { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    return X_;
+    return X_; 
 }
-const Eigen::VectorXd RobotState::getTheta() {
+const Eigen::VectorXd RobotState::getTheta() { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    return Theta_;
+    return Theta_; 
 }
-const Eigen::MatrixXd RobotState::getP() {
+const Eigen::MatrixXd RobotState::getP() { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    return P_;
+    return P_; 
 }
-const Eigen::Matrix3d RobotState::getRotation() {
+const Eigen::Matrix3d RobotState::getRotation() { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    return X_.block<3,3>(0,0);
+    return X_.block<3,3>(0,0); 
 }
-const Eigen::Vector3d RobotState::getVelocity() {
+const Eigen::Vector3d RobotState::getVelocity() { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    return X_.block<3,1>(0,3);
+    return X_.block<3,1>(0,3); 
 }
-const Eigen::Vector3d RobotState::getPosition() {
+const Eigen::Vector3d RobotState::getPosition() { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    return X_.block<3,1>(0,4);
+    return X_.block<3,1>(0,4); 
 }
-const Eigen::Vector3d RobotState::getGyroscopeBias() {
+const Eigen::Vector3d RobotState::getGyroscopeBias() { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    return Theta_.head(3);
+    return Theta_.head(3); 
 }
-const Eigen::Vector3d RobotState::getAccelerometerBias() {
+const Eigen::Vector3d RobotState::getAccelerometerBias() { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    return Theta_.tail(3);
+    return Theta_.tail(3); 
 }
-const int RobotState::dimX() {
+const int RobotState::dimX() { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    return X_.cols();
+    return X_.cols(); 
 }
 const int RobotState::dimTheta() {
 #if INEKF_USE_MUTEX
@@ -136,60 +136,60 @@ const int RobotState::dimTheta() {
 #endif
     return Theta_.rows();
 }
-const int RobotState::dimP() {
+const int RobotState::dimP() { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    return P_.cols();
+    return P_.cols(); 
 }
 
-void RobotState::setX(const Eigen::MatrixXd& X) {
+void RobotState::setX(const Eigen::MatrixXd& X) { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    X_ = X;
+    X_ = X; 
 }
-void RobotState::setTheta(const Eigen::VectorXd& Theta) {
+void RobotState::setTheta(const Eigen::VectorXd& Theta) { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    Theta_ = Theta;
+    Theta_ = Theta; 
 }
-void RobotState::setP(const Eigen::MatrixXd& P) {
+void RobotState::setP(const Eigen::MatrixXd& P) { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    P_ = P;
+    P_ = P; 
 }
-void RobotState::setRotation(const Eigen::Matrix3d& R) {
+void RobotState::setRotation(const Eigen::Matrix3d& R) { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    X_.block<3,3>(0,0) = R;
+    X_.block<3,3>(0,0) = R; 
 }
-void RobotState::setVelocity(const Eigen::Vector3d& v) {
+void RobotState::setVelocity(const Eigen::Vector3d& v) { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    X_.block<3,1>(0,3) = v;
+    X_.block<3,1>(0,3) = v; 
 }
-void RobotState::setPosition(const Eigen::Vector3d& p) {
+void RobotState::setPosition(const Eigen::Vector3d& p) { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    X_.block<3,1>(0,4) = p;
+    X_.block<3,1>(0,4) = p; 
 }
-void RobotState::setGyroscopeBias(const Eigen::Vector3d& bg) {
+void RobotState::setGyroscopeBias(const Eigen::Vector3d& bg) { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    Theta_.head(3) = bg;
+    Theta_.head(3) = bg; 
 }
-void RobotState::setAccelerometerBias(const Eigen::Vector3d& ba) {
+void RobotState::setAccelerometerBias(const Eigen::Vector3d& ba) { 
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(mutex_);
 #endif
-    Theta_.tail(3) = ba;
+    Theta_.tail(3) = ba; 
 }
 
 
@@ -208,7 +208,7 @@ void RobotState::copyDiagX(int n, Eigen::MatrixXd& BigX) {
     return;
 }
 
-ostream& operator<<(ostream& os, const RobotState& s) {
+ostream& operator<<(ostream& os, const RobotState& s) {  
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(s.mutex_);
 #endif
@@ -217,49 +217,7 @@ ostream& operator<<(ostream& os, const RobotState& s) {
     os << "Theta:\n" << s.Theta_ << endl << endl;
     os << "P:\n" << s.P_ << endl;
     os << "-----------------------------------";
-    return os;
-}
-
-// Augment state using equations 24, 25, 26
-void RobotState::augmentState(CameraPose cam_pose){
-    Eigen::MatrixXd new_X(X_.rows(), X_.cols() + 4);
-    new_X << X_, cam_pose.getRotation(), cam_pose.getPosition();
-    setX(new_X);
-
-    auto m = getNumberCameras();
-
-    Eigen::MatrixXd J = Eigen::MatrixXd::Zero(6, 15 + 6*m);
-    J.block<3, 3>(0, 0) = Eigen::MatrixXd::Identity(3, 3);
-    J.block<3, 3>(3, 6) = Eigen::MatrixXd::Identity(3, 3);
-
-    Eigen::MatrixXd IJ = Eigen::MatrixXd::Identity(21 + 6*m , 15 + 6*m);
-
-    Eigen::MatrixXd new_P(21 + 6*m, 21 + 6*m);
-    new_P = IJ * P_ * IJ.transpose();
-
-
-    setP(new_P);
-
-    Cameras_.push_back(cam_pose);
-}
-
-
-void RobotState::updateCameraEstimate(const int cam_index, CameraPose cam_pose){
-    // Change rotation and position
-    Eigen::MatrixXd new_X = getX();
-
-    new_X.block<3, 3>(0, 5 + 4*cam_index) = cam_pose.getRotation();
-    new_X.block<3, 1>(0, 8 + 4*cam_index) = cam_pose.getPosition();
-
-    setX(new_X);
-
-    Cameras_[cam_index] = cam_pose;
-    return;
-}
-
-CameraPose RobotState::getCameraEstimate(const int cam_index){
-    return Cameras_[cam_index];
-}
-
+    return os;  
+} 
 
 } // end inekf namespace

@@ -35,7 +35,7 @@ using namespace inekf;
 
 int main() {
     //  ---- Initialize invariant extended Kalman filter ----- //
-    RobotState initial_state;
+    RobotState initial_state; 
 
     // Initialize state mean
     Eigen::Matrix3d R0;
@@ -76,20 +76,20 @@ int main() {
     // Landmark 1
     id = 1;
     p_wl << 0,-1,0;
-    prior_landmarks.insert(pair<int,Eigen::Vector3d> (id, p_wl));
+    prior_landmarks.insert(pair<int,Eigen::Vector3d> (id, p_wl)); 
 
     // // Landmark 2
     // id = 2;
     // p_wl << 1,1,-0.5;
-    // prior_landmarks.insert(pair<int,Eigen::Vector3d> (id, p_wl));
+    // prior_landmarks.insert(pair<int,Eigen::Vector3d> (id, p_wl)); 
 
     // Landmark 3
     id = 3;
     p_wl << 2,-1,0.5;
-    prior_landmarks.insert(pair<int,Eigen::Vector3d> (id, p_wl));
+    prior_landmarks.insert(pair<int,Eigen::Vector3d> (id, p_wl)); 
 
     // Store landmarks for localization
-    filter.setPriorLandmarks(prior_landmarks);
+    filter.setPriorLandmarks(prior_landmarks); 
 
 
     // Open data file
@@ -108,9 +108,9 @@ int main() {
         if (measurement[0].compare("IMU")==0){
             cout << "Received IMU Data, propagating state\n";
             assert((measurement.size()-2) == 6);
-            t = stoi98(measurement[1]);
-            imu_measurement << stoi98(measurement[2]),
-                               stoi98(measurement[3]),
+            t = stoi98(measurement[1]); 
+            imu_measurement << stoi98(measurement[2]), 
+                               stoi98(measurement[3]), 
                                stoi98(measurement[4]),
                                stoi98(measurement[5]),
                                stoi98(measurement[6]),
@@ -125,20 +125,19 @@ int main() {
         else if (measurement[0].compare("LANDMARK")==0){
             cout << "Received LANDMARK observation, correcting state\n";
             assert((measurement.size()-2)%4 == 0);
-            t = stoi98(measurement[1]);
+            t = stoi98(measurement[1]); 
             vectorLandmarks measured_landmarks;
             for (int i=2; i<measurement.size(); i+=4) {
                 int id = stoi98(measurement[i]);
                 Eigen::Vector3d p_bl;
-                p_bl << stoi98(measurement[i+1]),
-                        stoi98(measurement[i+2]),
+                p_bl << stoi98(measurement[i+1]), 
+                        stoi98(measurement[i+2]), 
                         stoi98(measurement[i+3]);
                 Landmark landmark(id, p_bl);
-                measured_landmarks.push_back(landmark);
+                measured_landmarks.push_back(landmark); 
             }
 
             // Correct state using landmark measurements
-            std::cout << "Number of landmarks; " << measured_landmarks.size() << std::endl;
             filter.CorrectLandmarks(measured_landmarks);
         }
 

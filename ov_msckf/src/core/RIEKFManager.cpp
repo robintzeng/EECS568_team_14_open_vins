@@ -472,6 +472,8 @@ bool RIEKFManager::try_to_initialize() {
         // Try to initialize the system
         bool success = initializer->initialize_with_imu(time0, q_GtoI0, b_w0, v_I0inG, b_a0, p_I0inG);
 
+        
+
         // Return if it failed
         if (!success) {
             return false;
@@ -480,9 +482,11 @@ bool RIEKFManager::try_to_initialize() {
         if (state->is_using_invariant() == true){
             inekf::RobotState robot_state;
 
-            // Eigen::Matrix3d R0;
-            // R0 = convert(q_GtoI0); // TODO(lowmanj)
-            // robot_state.setRotation(R0);
+            ////Finish////// 
+            Eigen::Matrix3d R0;
+            R0 = quat_2_Rot(q_GtoI0); // TODO(lowmanj)
+            robot_state.setRotation(R0);
+            //////////
 
             robot_state.setVelocity(v_I0inG);
             robot_state.setGyroscopeBias(b_w0);
@@ -544,6 +548,7 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     // Propagate the state forward to the current update time
     // Also augment it with a new clone!
     auto prop_imu_data = propagator->get_prop_imu_data(state, timestamp);
+    
     auto timestamp_before = state->timestamp();
 
     std::cout << " " << std::endl;

@@ -12,44 +12,14 @@
  **/
 
 #ifndef ROBOTSTATE_H
-#define ROBOTSTATE_H
+#define ROBOTSTATE_H 
 #include <Eigen/Dense>
 #include <iostream>
-#include <vector>
 #if INEKF_USE_MUTEX
 #include <mutex>
 #endif
 
 namespace inekf {
-
-class CameraPose{
-    public:
-        CameraPose(const Eigen::MatrixXd& R, const Eigen::VectorXd& pos) :
-        R_(R), pos_(pos){}
-
-        void setRotation(Eigen::MatrixXd new_R) {
-            assert (new_R.rows() == R_.rows());
-            assert (new_R.cols() == R_.cols());
-            R_ = new_R;
-        }
-
-        void setPosition(Eigen::VectorXd new_pos) {
-            assert (new_pos.rows() == pos_.rows());
-            assert (new_pos.cols() == pos_.cols());
-            pos_ = new_pos;
-        }
-
-        Eigen::MatrixXd getRotation() const{
-            return R_;
-        }
-
-        Eigen::VectorXd getPosition() const{
-            return pos_;
-        }
-    private:
-        Eigen::MatrixXd R_;
-        Eigen::VectorXd pos_;
-};
 
 class RobotState {
 
@@ -59,7 +29,7 @@ class RobotState {
         RobotState(const Eigen::MatrixXd& X);
         RobotState(const Eigen::MatrixXd& X, const Eigen::VectorXd& Theta);
         RobotState(const Eigen::MatrixXd& X, const Eigen::VectorXd& Theta, const Eigen::MatrixXd& P);
-
+        
 #if INEKF_USE_MUTEX
         // RobotState(RobotState&& other); // Move initialization
         RobotState(const RobotState& other); // Copy initialization
@@ -90,21 +60,12 @@ class RobotState {
 
         void copyDiagX(int n, Eigen::MatrixXd& BigX);
 
-        friend std::ostream& operator<<(std::ostream& os, const RobotState& s);
-
-        void augmentState(CameraPose cam_pose);
-        void updateCameraEstimate(const int cam_index, CameraPose cam_pose);
-        CameraPose getCameraEstimate(const int cam_index);
-        int getNumberCameras() const {return Cameras_.size();}
-
-        std::vector<CameraPose> getCameras() {return Cameras_;}
-        std::vector<CameraPose> Cameras_;
+        friend std::ostream& operator<<(std::ostream& os, const RobotState& s);  
 
     private:
         Eigen::MatrixXd X_;
         Eigen::VectorXd Theta_;
         Eigen::MatrixXd P_;
-
 #if INEKF_USE_MUTEX
         mutable std::mutex mutex_;
 #endif
@@ -112,5 +73,5 @@ class RobotState {
 };
 
 } // end inekf namespace
-#endif
+#endif 
 

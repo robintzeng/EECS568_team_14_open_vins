@@ -462,6 +462,7 @@ bool VioManager::try_to_initialize() {
         double time0;
         Eigen::Matrix<double, 4, 1> q_GtoI0;
         Eigen::Matrix<double, 3, 1> b_w0, v_I0inG, b_a0, p_I0inG;
+        
 
         // Try to initialize the system
         bool success = initializer->initialize_with_imu(time0, q_GtoI0, b_w0, v_I0inG, b_a0, p_I0inG);
