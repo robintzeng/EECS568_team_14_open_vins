@@ -89,7 +89,7 @@ namespace ov_msckf {
          * @param feature_vec Features that can be used for update
          */
         void update(State *state, std::vector<Feature*>& feature_vec);
-
+        void update(State *state,std::shared_ptr<inekf::InEKF> filter_p_, std::vector<Feature*>& feature_vec);
 
 
     protected:

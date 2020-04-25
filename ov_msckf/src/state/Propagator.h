@@ -143,6 +143,7 @@ namespace ov_msckf {
          */
         void propagate_and_clone(State *state, double timestamp);
 
+        void propagate_and_clone(State *state, std::shared_ptr<inekf::InEKF> filter_p_,double timestamp);
 
         /**
          * @brief Helper function that given current imu data, will select imu readings between the two times.
@@ -207,8 +208,6 @@ namespace ov_msckf {
         void predict_and_compute(State *state, const IMUDATA data_minus, const IMUDATA data_plus,
                                  Eigen::Matrix<double, 15, 15> &F, Eigen::Matrix<double, 15, 15> &Qd);
 
-
-        void propagate_cov_inekf(State *state, double dt);
 
         /**
          * @brief Discrete imu mean propagation.

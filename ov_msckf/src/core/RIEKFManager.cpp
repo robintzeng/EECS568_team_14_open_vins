@@ -679,7 +679,7 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
     // Pass them to our MSCKF updater
     // We update first so that our SLAM initialization will be more accurate??
-    updaterMSCKF->update(state, featsup_MSCKF);
+    updaterMSCKF->update(state, filter_p_, featsup_MSCKF);
     rT4 =  boost::posix_time::microsec_clock::local_time();
 
 
