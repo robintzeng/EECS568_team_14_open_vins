@@ -46,7 +46,8 @@ std::vector<Propagator::IMUDATA> Propagator::get_prop_imu_data(State* state, dou
 
 
 
-void Propagator::propagate_and_clone(State* state, double timestamp) {
+void Propagator::propagate_and_clone(State* state, double timestamp)
+{
 
     // If the difference between the current update time and state is zero
     // We should crash, as this means we would have two clones at the same time!!!!
@@ -99,7 +100,9 @@ void Propagator::propagate_and_clone(State* state, double timestamp) {
         Qd_summed = F * Qd_summed * F.transpose() + Qdi;
         Qd_summed = 0.5*(Qd_summed+Qd_summed.transpose());
         dt_summed +=  prop_data.at(i+1).timestamp-prop_data.at(i).timestamp;
+
     }
+
 
     // Last angular velocity (used for cloning when estimating time offset)
     Eigen::Matrix<double,3,1> last_w = prop_data.at(prop_data.size()-2).wm - state->imu()->bias_g();
@@ -109,10 +112,24 @@ void Propagator::propagate_and_clone(State* state, double timestamp) {
 
     // Do the update to the covariance with our "summed" state transition and IMU noise addition...
     auto &Cov = state->Cov();
-    size_t imu_id = state->imu()->id();
-    Cov.block(imu_id,0,15,state->n_vars()) = Phi_summed*Cov.block(imu_id,0,15,state->n_vars());
-    Cov.block(0,imu_id,state->n_vars(),15) = Cov.block(0,imu_id,state->n_vars(),15)*Phi_summed.transpose();
-    Cov.block(imu_id,imu_id,15,15) += Qd_summed;
+
+    if (state->is_using_invariant() == false){
+        size_t imu_id = state->imu()->id();
+        Cov.block(imu_id, 0, 15, state->n_vars()) = Phi_summed*Cov.block(imu_id,0,15,state->n_vars());
+        Cov.block(0, imu_id, state->n_vars(), 15) = Cov.block(0,imu_id,state->n_vars(),15)*Phi_summed.transpose();
+        Cov.block(imu_id,imu_id,15,15) += Qd_summed;
+    }
+    else{
+        // Update IMU covariance using invariant update
+        double dt = prop_data.back().timestamp - prop_data.front().timestamp;
+        assert(dt > 0);
+
+        propagate_cov_inekf(state, dt);
+        auto filter_cov = state->filter_p_->getState().getP();
+        assert(filter_cov.rows() == 15);
+        assert(filter_cov.cols() == 15);
+        Cov.block(0, 0, 15, 15) = filter_cov;
+    }
 
     // Ensure the covariance is symmetric
     Cov = 0.5*(Cov+Cov.transpose());
@@ -240,7 +257,8 @@ std::vector<Propagator::IMUDATA> Propagator::select_imu_readings(const std::vect
 
 
 void Propagator::predict_and_compute(State *state, const IMUDATA data_minus, const IMUDATA data_plus,
-                                     Eigen::Matrix<double,15,15> &F, Eigen::Matrix<double,15,15> &Qd) {
+                                     Eigen::Matrix<double,15,15> &F, Eigen::Matrix<double,15,15> &Qd)
+{
 
     // Set them to zero
     F.setZero();
@@ -259,8 +277,8 @@ void Propagator::predict_and_compute(State *state, const IMUDATA data_minus, con
     // Compute the new state mean value
     Eigen::Vector4d new_q;
     Eigen::Vector3d new_v, new_p;
-    if(state->options().use_rk4_integration) predict_mean_rk4(state, dt, w_hat, a_hat, w_hat2, a_hat2, new_q, new_v, new_p);
-    else predict_mean_discrete(state, dt, w_hat, a_hat, w_hat2, a_hat2, new_q, new_v, new_p);
+    if(state->options().use_rk4_integration) {predict_mean_rk4(state, dt, w_hat, a_hat, w_hat2, a_hat2, new_q, new_v, new_p);}
+    else {predict_mean_discrete(state, dt, w_hat, a_hat, w_hat2, a_hat2, new_q, new_v, new_p);}
 
     // Get the locations of each entry of the imu state
     int th_id = state->imu()->q()->id()-state->imu()->id();
@@ -351,11 +369,74 @@ void Propagator::predict_and_compute(State *state, const IMUDATA data_minus, con
 
 }
 
+// Propagate the IMU covariance using the Invariant EKF formulation P_pred = Phi * P * Phi' + Qk_hat
+void Propagator::propagate_cov_inekf(State *state, double dt)
+{
+    auto filter_state = state->filter_p_->getState();
+    int dimP = filter_state.dimP();
+    int dimTheta = filter_state.dimTheta();
+    auto num_landmarks = filter_state.getNumberCameras();
+    auto R = filter_state.getRotation();
+    auto p = filter_state.getPosition();
+    auto v = filter_state.getVelocity();
+
+    Eigen::MatrixXd A = Eigen::MatrixXd::Zero(dimP, dimP);
+    A.block<3, 3>(3, 0) = skew_x(_gravity);
+    A.block<3, 3>(6, 3) = Eigen::Matrix3d::Identity();
+
+    A.block<3, 3>(0, dimP-dimTheta) = -R;
+    A.block<3, 3>(3, dimP-dimTheta + 3) = -R;
+
+    A.block<3, 3>(3, dimP-dimTheta)= -skew_x(v) * R;
+    A.block<3, 3>(6, dimP-dimTheta) = -skew_x(p) * R;
+
+    Eigen::MatrixXd I = Eigen::MatrixXd::Identity(dimP, dimP);
+    Eigen::MatrixXd Phi = I + A * dt; // equivalent to expm(A)
+
+    Eigen::MatrixXd adj = Eigen::MatrixXd::Zero(dimP, dimP);
+    adj.block<3, 3>(0, 0) = R;
+    adj.block<3, 3>(3, 3) = R;
+    adj.block<3, 3>(6, 6) = R;
+    adj.block<3, 3>(9, 9) = R;
+    adj.block<3, 3>(3, 0) = skew_x(v) * R;
+    adj.block<3, 3>(6, 0) = skew_x(p) * R;
+
+    // TODO(lowmanj) Does there need to be a -skew_x(camera_pos)*R in here somewhere?
+    // for (int cam_index = 0; cam_index < num_landmarks; cam_index++){
+    //     int diag_ind = 15 + 6*cam_index;
+    //     assert(diag_ind < adj.rows());
+    //     assert(diag_ind < adj.cols());
+
+    //     auto cam = filter_state.getCameraEstimate(cam_index);
+
+    //     adj.block<3, 3>(diag_ind, diag_ind) = cam.getRotation();
+    //     adj.block<3, 3>(diag_ind+3, diag_ind+3) = cam.getRotation();
+    //     adj.block<3, 3>(diag_ind+3, diag_ind) = skew_x(cam.getPosition()) * cam.getRotation();
+    // }
+
+    Eigen::MatrixXd Qk = Eigen::MatrixXd::Zero(dimP,dimP);
+
+    // Fill in top 15x15 of Qk with Q_dn
+    Qk.block(0,0,3,3) = _noises.sigma_w_2/dt*Eigen::Matrix<double,3,3>::Identity();
+    Qk.block(3,3,3,3) = _noises.sigma_a_2/dt*Eigen::Matrix<double,3,3>::Identity();
+    Qk.block(6,6,3,3) = _noises.sigma_wb_2/dt*Eigen::Matrix<double,3,3>::Identity();
+    Qk.block(9,9,3,3) = _noises.sigma_ab_2/dt*Eigen::Matrix<double,3,3>::Identity();
+
+    Eigen::MatrixXd Qk_hat = Phi * adj * Qk * adj.transpose() * Phi.transpose() * dt;
+
+    Eigen::MatrixXd P_pred = Phi * filter_state.getP() * Phi.transpose() + Qk_hat;
+
+    filter_state.setP(P_pred);
+    state->filter_p_->setState(filter_state);
+
+    return;
+}
 
 void Propagator::predict_mean_discrete(State *state, double dt,
                                         const Eigen::Vector3d &w_hat1, const Eigen::Vector3d &a_hat1,
                                         const Eigen::Vector3d &w_hat2, const Eigen::Vector3d &a_hat2,
-                                        Eigen::Vector4d &new_q, Eigen::Vector3d &new_v, Eigen::Vector3d &new_p) {
+                                        Eigen::Vector4d &new_q, Eigen::Vector3d &new_v, Eigen::Vector3d &new_p)
+{
 
     // If we are averaging the IMU, then do so
     Eigen::Vector3d w_hat = w_hat1;
@@ -393,7 +474,8 @@ void Propagator::predict_mean_discrete(State *state, double dt,
 void Propagator::predict_mean_rk4(State *state, double dt,
                                   const Eigen::Vector3d &w_hat1, const Eigen::Vector3d &a_hat1,
                                   const Eigen::Vector3d &w_hat2, const Eigen::Vector3d &a_hat2,
-                                  Eigen::Vector4d &new_q, Eigen::Vector3d &new_v, Eigen::Vector3d &new_p) {
+                                  Eigen::Vector4d &new_q, Eigen::Vector3d &new_v, Eigen::Vector3d &new_p)
+{
 
     // Pre-compute things
     Eigen::Vector3d w_hat = w_hat1;

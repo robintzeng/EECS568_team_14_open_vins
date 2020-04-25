@@ -34,6 +34,7 @@
 #include "types/PoseJPL.h"
 #include "types/Landmark.h"
 #include "StateOptions.h"
+#include "feat/Feature.h"
 
 using namespace ov_core;
 
@@ -125,8 +126,8 @@ namespace ov_msckf {
             auto bg0 = robot_state.getGyroscopeBias();
             auto ba0 = robot_state.getAccelerometerBias();
             auto inekf_cov = robot_state.getP();
-
             auto rquat = Eigen::Quaterniond(robot_state.getRotation());
+
             Eigen::Vector4d quat0;
             quat0 << rquat.x(), rquat.y(), rquat.z(), rquat.w();
 
@@ -147,10 +148,6 @@ namespace ov_msckf {
 
         /// Access to IMU type
         IMU* imu() {
-            if (is_using_invariant() == true){
-                update_imu_from_filter();
-            }
-
             return _imu;
         }
 
@@ -257,23 +254,15 @@ namespace ov_msckf {
             _is_using_invariant = true;
         }
 
-        void update_inekf_landmarks(inekf::vectorLandmarks landmarks){
-            inekf_landmarks_ = landmarks;
-        }
-
-        inekf::vectorLandmarks get_inekf_landmarks() const{
-            return inekf_landmarks_;
-        }
-
         bool is_using_invariant() const{
             return _is_using_invariant;
         }
 
+        std::shared_ptr<inekf::InEKF> filter_p_;
+
     protected:
 
         bool _is_using_invariant {false};
-
-        inekf::vectorLandmarks inekf_landmarks_;
 
         /// Current timestamp (should be the last update time!)
         double _timestamp;
@@ -308,7 +297,6 @@ namespace ov_msckf {
         /// Vector of variables
         std::vector<Type*> _variables;
 
-        std::shared_ptr<inekf::InEKF> filter_p_;
 
 
     private:

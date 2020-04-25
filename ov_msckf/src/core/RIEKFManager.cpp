@@ -544,50 +544,9 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     // Propagate the state forward to the current update time
     // Also augment it with a new clone!
     auto prop_imu_data = propagator->get_prop_imu_data(state, timestamp);
-    auto timestamp_before = state->timestamp();
 
-    std::cout << " " << std::endl;
-    ROS_INFO("Before MSCKF prop: ");
-    print_current_state(state, filter_p_);
-    // Need to keep this because it clones
     propagator->propagate_and_clone(state, timestamp);
     rT3 =  boost::posix_time::microsec_clock::local_time();
-    std::cout << " " << std::endl;
-    ROS_INFO("After MSCKF prop: ");
-    print_current_state(state, filter_p_);
-
-    // Reset state timestamp
-    state->set_timestamp(timestamp_before);
-
-    // InEKF Propagation
-    auto m_last = prop_imu_data.end()[-1];
-    auto m_2_last = prop_imu_data.end()[-2];
-
-    Eigen::Matrix<double,6,1> imu_measurement_prev = Eigen::Matrix<double,6,1>::Zero();
-    Eigen::Matrix<double,6,1> imu_measurement = Eigen::Matrix<double,6,1>::Zero();
-
-    imu_measurement_prev << m_2_last.wm[0], m_2_last.wm[1], m_2_last.wm[2],
-                             m_2_last.am[0], m_2_last.am[1], m_2_last.am[2];
-
-    imu_measurement << m_last.wm[0], m_last.wm[1], m_last.wm[2],
-                       m_last.am[0], m_last.am[1], m_last.am[2];
-
-    double dt = m_last.timestamp - m_2_last.timestamp;
-
-    // Update filter_p state from OV state
-    std::cout << "dt: " << dt << std::endl;
-    std::cout << "imu measurement prev: " << imu_measurement_prev << std::endl;
-
-    // filter_p_->setState(robot_state);
-    filter_p_->Propagate(imu_measurement_prev, dt);
-
-    // Update OV state with inekf State params
-    state->set_timestamp(timestamp);
-
-    std::cout << " " << std::endl;
-    ROS_INFO("After InEKF prop: ");
-    print_current_state(state, filter_p_);
-
 
     // If we have not reached max clones, we should just return...
     // This isn't super ideal, but it keeps the logic after this easier...
@@ -718,36 +677,6 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     // Now that we have a list of features, lets do the EKF update for MSCKF and SLAM!
     //===================================================================================
 
-    // Note: This is a hack to put the landmarks into the state. Then we can use
-    // the landmarks for an inekf update step instead of the normal EKF update
-    // when we call updaterMSCKF->update(state, featsup_MSCKF); below
-    // InEKF update using MSCKF Landmarks
-    // FeatureDatabase* feats_db = trackFEATS->get_feature_database();
-    // FeatureDatabase* aruco_db = trackARUCO->get_feature_database();
-
-    // if (feats_db!=nullptr){
-    //     std::cout << "Size of feats_db: " << feats_db->size() << std::endl;
-    // }
-    // if (aruco_db!=nullptr){
-    //     std::cout << "Size of aruco_db: " << aruco_db->size() << std::endl;
-    // }
-
-
-    inekf::vectorLandmarks measured_landmarks = conversion_utils::convert_ov_features_to_landmarks(featsup_MSCKF);
-    // inekf::vectorLandmarks subset_landmarks;
-
-    // int num_landmarks = measured_landmarks.size();
-    // if (measured_landmarks.size() > 100){
-    //     num_landmarks = 100;
-    // }
-
-    // for (int ind=0; ind < num_landmarks; ind++){
-    //     subset_landmarks.push_back(measured_landmarks.at(ind));
-    // }
-
-    state->update_inekf_landmarks(measured_landmarks);
-
-
     // Pass them to our MSCKF updater
     // We update first so that our SLAM initialization will be more accurate??
     updaterMSCKF->update(state, featsup_MSCKF);
@@ -828,13 +757,7 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
     // Update our distance traveled
     if(timelastupdate != -1 && state->get_clones().find(timelastupdate) != state->get_clones().end()) {
-        Eigen::Matrix<double,3,1> p1;
-        if (state->is_using_invariant() == true){
-            p1 = filter_p_->getState().getPosition();
-        }
-        else{
-            p1 = state->imu()->pos();
-        }
+        auto p1 = state->imu()->pos();
 
         Eigen::Matrix<double,3,1> dx = p1 - state->get_clone(timelastupdate)->pos();
         distance += dx.norm();
@@ -842,7 +765,6 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     timelastupdate = timestamp;
 
     ROS_INFO("dist = %.2f (meters)", distance);
-    print_current_state(state, filter_p_);
 
 
     // Debug for camera imu offset

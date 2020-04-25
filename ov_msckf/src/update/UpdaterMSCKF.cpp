@@ -29,7 +29,7 @@ using namespace ov_msckf;
 
 
 
-void UpdaterMSCKF::update(State *state, std::vector<Feature*>& feature_vec) {
+void UpdaterMSCKF::update(State *state, std::vector<Feature*>& feature_vec){
 
     // Return if no features
     if(feature_vec.empty())

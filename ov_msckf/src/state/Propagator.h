@@ -26,6 +26,9 @@
 #include "utils/quat_ops.h"
 #include <ros/ros.h>
 
+#include "../../invariant-ekf/include/RobotState.h"
+
+
 using namespace ov_core;
 
 
@@ -203,6 +206,9 @@ namespace ov_msckf {
          */
         void predict_and_compute(State *state, const IMUDATA data_minus, const IMUDATA data_plus,
                                  Eigen::Matrix<double, 15, 15> &F, Eigen::Matrix<double, 15, 15> &Qd);
+
+
+        void propagate_cov_inekf(State *state, double dt);
 
         /**
          * @brief Discrete imu mean propagation.

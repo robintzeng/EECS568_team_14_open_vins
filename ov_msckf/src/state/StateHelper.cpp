@@ -134,10 +134,10 @@ void StateHelper::EKFUpdate(State *state, const std::vector<Type *> &H_order, co
     //     // and overwrite the state covariance matrix
 
     //     // InEKF update using MSCKF Landmarks
-    //     inekf::vectorLandmarks measured_landmarks = state->get_inekf_landmarks();
-    //     std::cout << "InEKF Correcting "<< measured_landmarks.size() <<" landmarks" << std::endl;
-    //     state->filter_p_->CorrectLandmarks(measured_landmarks);
-    //     std::cout << "Finished correcting landmarks" << std::endl;
+    //     std::vector<Feature*> featsup_MSCKF = state->get_msckf_features();
+    //     std::cout << "InEKF Correcting "<< featsup_MSCKF.size() <<" features" << std::endl;
+    //     state->filter_p_->CorrectFeatures(featsup_MSCKF);
+    //     std::cout << "Finished correcting features" << std::endl;
 
     //     auto robot_state = state->filter_p_->getState();
 
