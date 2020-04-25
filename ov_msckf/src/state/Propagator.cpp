@@ -103,7 +103,6 @@ void Propagator::propagate_and_clone(State* state, double timestamp)
 
     }
 
-
     // Last angular velocity (used for cloning when estimating time offset)
     Eigen::Matrix<double,3,1> last_w = prop_data.at(prop_data.size()-2).wm - state->imu()->bias_g();
 
@@ -113,23 +112,23 @@ void Propagator::propagate_and_clone(State* state, double timestamp)
     // Do the update to the covariance with our "summed" state transition and IMU noise addition...
     auto &Cov = state->Cov();
 
-    if (state->is_using_invariant() == false){
-        size_t imu_id = state->imu()->id();
-        Cov.block(imu_id, 0, 15, state->n_vars()) = Phi_summed*Cov.block(imu_id,0,15,state->n_vars());
-        Cov.block(0, imu_id, state->n_vars(), 15) = Cov.block(0,imu_id,state->n_vars(),15)*Phi_summed.transpose();
-        Cov.block(imu_id,imu_id,15,15) += Qd_summed;
-    }
-    else{
+    size_t imu_id = state->imu()->id();
+    Cov.block(imu_id, 0, 15, state->n_vars()) = Phi_summed*Cov.block(imu_id, 0, 15, state->n_vars());
+    Cov.block(0, imu_id, state->n_vars(), 15) = Cov.block(0, imu_id, state->n_vars(), 15)*Phi_summed.transpose();
+    Cov.block(imu_id,imu_id,15,15) += Qd_summed;
+
+    std::cout << "before inekf Cov: \n" << Cov.block<3,3>(0,0) << std::endl;
+
+    if (state->is_using_invariant() == true){
         // Update IMU covariance using invariant update
         double dt = prop_data.back().timestamp - prop_data.front().timestamp;
         assert(dt > 0);
 
         propagate_cov_inekf(state, dt);
-        auto filter_cov = state->filter_p_->getState().getP();
-        assert(filter_cov.rows() == 15);
-        assert(filter_cov.cols() == 15);
-        Cov.block(0, 0, 15, 15) = filter_cov;
     }
+
+    std::cout << "After inekf Cov: \n" << Cov.block<3,3>(0,0) << std::endl;
+
 
     // Ensure the covariance is symmetric
     Cov = 0.5*(Cov+Cov.transpose());
@@ -372,14 +371,21 @@ void Propagator::predict_and_compute(State *state, const IMUDATA data_minus, con
 // Propagate the IMU covariance using the Invariant EKF formulation P_pred = Phi * P * Phi' + Qk_hat
 void Propagator::propagate_cov_inekf(State *state, double dt)
 {
-    auto filter_state = state->filter_p_->getState();
-    int dimP = filter_state.dimP();
-    int dimTheta = filter_state.dimTheta();
-    auto num_landmarks = filter_state.getNumberCameras();
-    auto R = filter_state.getRotation();
-    auto p = filter_state.getPosition();
-    auto v = filter_state.getVelocity();
+    // auto filter_state = state->filter_p_->getState();
+    int dimP = state->n_vars();
+    int dimTheta = 6;
+    // auto num_landmarks = filter_state.getNumberCameras();
 
+    // auto R = filter_state.getRotation();
+    // auto p = filter_state.getPosition();
+    // auto v = filter_state.getVelocity();
+
+    Eigen::Vector3d p = state->imu()->pos();
+    Eigen::Vector3d v = state->imu()->vel();
+    Eigen::Matrix3d R= state->imu()->Rot();
+    auto P = state->Cov();
+
+    // std::cout << "Building A matrix " << std::endl;
     Eigen::MatrixXd A = Eigen::MatrixXd::Zero(dimP, dimP);
     A.block<3, 3>(3, 0) = skew_x(_gravity);
     A.block<3, 3>(6, 3) = Eigen::Matrix3d::Identity();
@@ -393,6 +399,7 @@ void Propagator::propagate_cov_inekf(State *state, double dt)
     Eigen::MatrixXd I = Eigen::MatrixXd::Identity(dimP, dimP);
     Eigen::MatrixXd Phi = I + A * dt; // equivalent to expm(A)
 
+    // std::cout << "Building adj matrix " << std::endl;
     Eigen::MatrixXd adj = Eigen::MatrixXd::Zero(dimP, dimP);
     adj.block<3, 3>(0, 0) = R;
     adj.block<3, 3>(3, 3) = R;
@@ -414,6 +421,7 @@ void Propagator::propagate_cov_inekf(State *state, double dt)
     //     adj.block<3, 3>(diag_ind+3, diag_ind) = skew_x(cam.getPosition()) * cam.getRotation();
     // }
 
+    // std::cout << "Building Qk matrix " << std::endl;
     Eigen::MatrixXd Qk = Eigen::MatrixXd::Zero(dimP,dimP);
 
     // Fill in top 15x15 of Qk with Q_dn
@@ -424,10 +432,17 @@ void Propagator::propagate_cov_inekf(State *state, double dt)
 
     Eigen::MatrixXd Qk_hat = Phi * adj * Qk * adj.transpose() * Phi.transpose() * dt;
 
-    Eigen::MatrixXd P_pred = Phi * filter_state.getP() * Phi.transpose() + Qk_hat;
+    Eigen::MatrixXd P_pred = Phi * P * Phi.transpose() + Qk_hat;
 
-    filter_state.setP(P_pred);
-    state->filter_p_->setState(filter_state);
+    // filter_state.setP(P_pred);
+    // state->filter_p_->setState(filter_state);
+
+    auto imu_cov = P_pred.block<15, 15>(0, 0);
+
+    // std::cout << imu_cov.rows() << " " << imu_cov.cols() << std::endl;
+
+    auto &Cov = state->Cov();
+    Cov.block<15, 15>(0, 0) = imu_cov;
 
     return;
 }
