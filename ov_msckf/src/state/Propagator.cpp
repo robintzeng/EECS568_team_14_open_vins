@@ -234,6 +234,7 @@ void Propagator:: propagate_and_clone(State *state, std::shared_ptr<inekf::InEKF
     //Cov.block(0,imu_id,state->n_vars(),15) = Cov.block(0,imu_id,state->n_vars(),15)*Phi_summed.transpose();
     //Cov.block(imu_id,imu_id,15,15) += Qd_summed;
 
+
     // Ensure the covariance is symmetric
     //Cov = 0.5*(Cov+Cov.transpose());
 
