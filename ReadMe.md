@@ -1,4 +1,21 @@
 
+# Mobile Robotics Team 14
+This project modifies the Open VINS library to an Invariant EKF for covariance propagation and correction. The original Multi-State Constraint Kalman Filter methodology for initializing and triangulating visual features is maintained. Major differences are detailed below:
+
+The filter is composed of two stages, propagation and correction.
+
+1. Propagation
+The class method Propagation::predict_mean_discrete propagates the IMU state forward using the rotation velocity and acceleration readings from the IMU sensor (omega and a).
+
+The class method InEKF::Propagate propagates the uncertainty in the tangent space to update the covariance matrix.
+
+2. Correction
+Visual feature 3D positions (in the global frame), are estimated using Gauss Newton optimization, according to the original MSCKF algorithm in the class method UpdaterMSCKF::update.
+
+The estimated global feature positions are used in the invariant correction step of the class methods InEKF::CorrectLandmarks and InEKF::Correct.
+
+
+Original Open VINS documentation is included below
 
 # Open VINS
 
@@ -25,7 +42,7 @@ Please take a look at the feature list below for full details on what the system
 * **October 1, 2019** - We will be presenting at the [Visual-Inertial Navigation: Challenges and Applications
 ](http://udel.edu/~ghuang/iros19-vins-workshop/index.html) workshop at [IROS 2019](https://www.iros2019.org/). The submitted workshop paper can be found at [this](http://udel.edu/~ghuang/iros19-vins-workshop/papers/06.pdf) link.
 * **August 21, 2019** - Open sourced [ov_maplab](https://github.com/rpng/ov_maplab) for interfacing OpenVINS with the [maplab](https://github.com/ethz-asl/maplab) library.
-* **August 15, 2019** - Initial release of OpenVINS repository and documentation website! 
+* **August 15, 2019** - Initial release of OpenVINS repository and documentation website!
 
 
 ## Project Features
@@ -46,7 +63,7 @@ Please take a look at the feature list below for full details on what the system
     4. Anchored inverse depth
     5. Anchored MSCKF inverse depth
 * Calibration of sensor intrinsics and extrinsics
-    * Camera to IMU transform 
+    * Camera to IMU transform
     * Camera to IMU time offset
     * Camera intrinsics
 * Environmental SLAM feature
