@@ -189,6 +189,77 @@ void InEKF::Propagate(const Eigen::Matrix<double,6,1>& m, double dt) {
     return;
 }
 
+// InEKF Propagation - Inertial Data not propagate 
+void InEKF::Propagate(const Eigen::Matrix<double,6,1>& m, double dt,bool x) {
+
+    Eigen::Vector3d w = m.head(3) - state_.getGyroscopeBias();    // Angular Velocity
+    Eigen::Vector3d a = m.tail(3) - state_.getAccelerometerBias(); // Linear Acceleration
+    
+    Eigen::MatrixXd X = state_.getX();
+    Eigen::MatrixXd P = state_.getP();
+
+    // Extract State
+    Eigen::Matrix3d R = state_.getRotation();
+    Eigen::Vector3d v = state_.getVelocity();
+    Eigen::Vector3d p = state_.getPosition();
+
+    // Strapdown IMU motion model
+    /*Eigen::Vector3d phi = w*dt; 
+    Eigen::Matrix3d R_pred = R * Exp_SO3(phi);
+    Eigen::Vector3d v_pred = v + (R*a + g_)*dt;
+    Eigen::Vector3d p_pred = p + v*dt + 0.5*(R*a + g_)*dt*dt;
+
+    // Set new state (bias has constant dynamics)
+    state_.setRotation(R_pred);
+    state_.setVelocity(v_pred);
+    state_.setPosition(p_pred);*/
+
+    // ---- Linearized invariant error dynamics -----
+    int dimX = state_.dimX();
+    int dimP = state_.dimP();
+    int dimTheta = state_.dimTheta();
+    Eigen::MatrixXd A = Eigen::MatrixXd::Zero(dimP,dimP);
+    // Inertial terms
+    A.block<3,3>(3,0) = skew(g_); // TODO: Efficiency could be improved by not computing the constant terms every time
+    A.block<3,3>(6,3) = Eigen::Matrix3d::Identity();
+    // Bias terms
+    A.block<3,3>(0,dimP-dimTheta) = -R;
+    A.block<3,3>(3,dimP-dimTheta+3) = -R;
+    for (int i=3; i<dimX; ++i) {
+        A.block<3,3>(3*i-6,dimP-dimTheta) = -skew(X.block<3,1>(0,i))*R;
+    } 
+
+    // Noise terms
+    Eigen::MatrixXd Qk = Eigen::MatrixXd::Zero(dimP,dimP); // Landmark noise terms will remain zero
+    Qk.block<3,3>(0,0) = noise_params_.getGyroscopeCov(); 
+    Qk.block<3,3>(3,3) = noise_params_.getAccelerometerCov();
+    for(map<int,int>::iterator it=estimated_contact_positions_.begin(); it!=estimated_contact_positions_.end(); ++it) {
+        Qk.block<3,3>(3+3*(it->second-3),3+3*(it->second-3)) = noise_params_.getContactCov(); // Contact noise terms
+    }
+    Qk.block<3,3>(dimP-dimTheta,dimP-dimTheta) = noise_params_.getGyroscopeBiasCov();
+    Qk.block<3,3>(dimP-dimTheta+3,dimP-dimTheta+3) = noise_params_.getAccelerometerBiasCov();
+
+    // Discretization
+    Eigen::MatrixXd I = Eigen::MatrixXd::Identity(dimP,dimP);
+    Eigen::MatrixXd Phi = I + A*dt; // Fast approximation of exp(A*dt). TODO: explore using the full exp() instead
+    Eigen::MatrixXd Adj = I;
+    Adj.block(0,0,dimP-dimTheta,dimP-dimTheta) = Adjoint_SEK3(X); // Approx 200 microseconds
+    Eigen::MatrixXd PhiAdj = Phi * Adj;
+    Eigen::MatrixXd Qk_hat = PhiAdj * Qk * PhiAdj.transpose() * dt; // Approximated discretized noise matrix (faster by 400 microseconds)
+
+    // Propagate Covariance
+    Eigen::MatrixXd P_pred = Phi * P * Phi.transpose() + Qk_hat;
+
+    // Set new covariance
+    state_.setP(P_pred);
+
+    return;
+}
+
+
+
+
+
 // Correct State: Right-Invariant Observation
 void InEKF::Correct(const Observation& obs) {
     // Compute Kalman Gain
@@ -235,6 +306,8 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
     vectorLandmarks new_landmarks;
     vector<int> used_landmark_ids;
     
+    
+
     for (vectorLandmarksIterator it=measured_landmarks.begin(); it!=measured_landmarks.end(); ++it) {
         // Detect and skip if an ID is not unique (this would cause singularity issues in InEKF::Correct)
         if (find(used_landmark_ids.begin(), used_landmark_ids.end(), it->id) != used_landmark_ids.end()) { 
@@ -242,10 +315,13 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
             continue; 
         } else { used_landmark_ids.push_back(it->id); }
 
+        
+
         // See if we can find id in prior_landmarks or estimated_landmarks
         mapIntVector3dIterator it_prior = prior_landmarks_.find(it->id);
         map<int,int>::iterator it_estimated = estimated_landmarks_.find(it->id);
         if (it_prior!=prior_landmarks_.end()) {
+            cout << "A"  << endl;
             // Found in prior landmark set
             int dimX = state_.dimX();
             int dimP = state_.dimP();
@@ -288,7 +364,8 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
             PI.block(startIndex,startIndex2,3,dimX) = Eigen::MatrixXd::Zero(3,dimX);
             PI.block(startIndex,startIndex2,3,3) = Eigen::Matrix3d::Identity();
 
-        } else if (it_estimated!=estimated_landmarks_.end()) {;
+        } else if (it_estimated!=estimated_landmarks_.end()) {
+            cout << "B"  << endl;
             // Found in estimated landmark set
             int dimX = state_.dimX();
             int dimP = state_.dimP();
@@ -334,6 +411,7 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
 
 
         } else {
+            cout << "C"  << endl;
             // First time landmark as been detected (add to list for later state augmentation)
             new_landmarks.push_back(*it);
         }
@@ -347,6 +425,7 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
 
     // Augment state with newly detected landmarks
     if (new_landmarks.size() > 0) {
+        
         Eigen::MatrixXd X_aug = state_.getX(); 
         Eigen::MatrixXd P_aug = state_.getP();
         Eigen::Vector3d p = state_.getPosition();
@@ -369,6 +448,7 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
             P_aug = (F*P_aug*F.transpose() + G*noise_params_.getLandmarkCov()*G.transpose()).eval();
 
             // Update state and covariance
+            cout << "D"  << endl;
             state_.setX(X_aug);
             state_.setP(P_aug);
 

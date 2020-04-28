@@ -139,7 +139,7 @@ namespace ov_msckf {
          * @param timestamp Time to propagate to and clone at
          */
         void propagate_and_clone(State *state, double timestamp);
-
+        void propagate_and_clone(State *state, std::shared_ptr<inekf::InEKF> filter_p_,double timestamp);
 
         /**
          * @brief Helper function that given current imu data, will select imu readings between the two times.

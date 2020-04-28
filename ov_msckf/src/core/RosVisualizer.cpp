@@ -104,6 +104,8 @@ RosVisualizer::RosVisualizer(ros::NodeHandle &nh, VioManager* app, Simulator *si
 
 
 
+
+
 void RosVisualizer::visualize() {
 
 
@@ -495,6 +497,7 @@ void RosVisualizer::publish_groundtruth() {
     poseIinM.pose.position.y = state_gt(6,0);
     poseIinM.pose.position.z = state_gt(7,0);
     pub_posegt.publish(poseIinM);
+    
 
     // Append to our pose vector
     poses_gt.push_back(poseIinM);

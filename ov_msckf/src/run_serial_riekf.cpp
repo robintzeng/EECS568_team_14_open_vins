@@ -45,7 +45,7 @@ int main(int argc, char** argv)
 {
 
     // Launch our ros node
-    ros::init(argc, argv, "run_serial_riekf");
+    ros::init(argc, argv, "run_serial_msckf");
     ros::NodeHandle nh("~");
 
     // Create our VIO system
@@ -68,7 +68,7 @@ int main(int argc, char** argv)
     // Location of the ROS bag we want to read in
     std::string path_to_bag;
     //nhPrivate.param<std::string>("path_bag", path_to_bag, "/home/keck/catkin_ws/V1_01_easy.bag");
-    nh.param<std::string>("path_bag", path_to_bag, "/home/robin/vin_data/V1_01_easy.bag");
+    nh.param<std::string>("path_bag", path_to_bag, "/home/patrick/datasets/eth/V1_01_easy.bag");
     ROS_INFO("ros bag path is: %s", path_to_bag.c_str());
 
     // Load groundtruth if we have it
@@ -139,6 +139,7 @@ int main(int argc, char** argv)
     //===================================================================================
     //===================================================================================
 
+
     // Step through the rosbag
     for (const rosbag::MessageInstance& m : view) {
 
@@ -149,7 +150,6 @@ int main(int argc, char** argv)
         // Handle IMU measurement
         sensor_msgs::Imu::ConstPtr s2 = m.instantiate<sensor_msgs::Imu>();
         if (s2 != NULL && m.getTopic() == topic_imu) {
-
             // convert into correct format
             double timem = (*s2).header.stamp.toSec();
             Eigen::Matrix<double, 3, 1> wm, am;
@@ -162,7 +162,6 @@ int main(int argc, char** argv)
         // Handle LEFT camera
         sensor_msgs::Image::ConstPtr s0 = m.instantiate<sensor_msgs::Image>();
         if (s0 != NULL && m.getTopic() == topic_camera0) {
-
             // Get the image
             cv_bridge::CvImageConstPtr cv_ptr;
             try {
@@ -180,7 +179,6 @@ int main(int argc, char** argv)
         // Handle RIGHT camera
         sensor_msgs::Image::ConstPtr s1 = m.instantiate<sensor_msgs::Image>();
         if (s1 != NULL && m.getTopic() == topic_camera1) {
-
             // Get the image
             cv_bridge::CvImageConstPtr cv_ptr;
             try {
@@ -202,7 +200,6 @@ int main(int argc, char** argv)
 
         // Fill our buffer if we have not
         if(has_left && img0_buffer.rows == 0) {
-
             has_left = false;
             time_buffer = time;
             img0_buffer = img0.clone();
@@ -210,7 +207,6 @@ int main(int argc, char** argv)
 
         // Fill our buffer if we have not
         if(has_right && img1_buffer.rows == 0) {
-
             has_right = false;
             img1_buffer = img1.clone();
         }
@@ -236,6 +232,7 @@ int main(int argc, char** argv)
             img0_buffer = img0.clone();
         }
 
+
         // If we are in stereo mode and have both left and right, then process
         if(max_cameras==2 && has_left && has_right) {
             // process once we have initialized with the GT
@@ -245,7 +242,6 @@ int main(int argc, char** argv)
                 //imustate.block(11,0,6,1).setZero();
                 sys->initialize_with_gt(imustate);
             } else if(gt_states.empty() || sys->intialized()) {
-                ROS_INFO("feeding stereo measurement ");
                 sys->feed_measurement_stereo(time_buffer, img0_buffer, img1_buffer, 0, 1);
             }
             // visualize
@@ -258,7 +254,6 @@ int main(int argc, char** argv)
             img0_buffer = img0.clone();
             img1_buffer = img1.clone();
         }
-
 
     }
 

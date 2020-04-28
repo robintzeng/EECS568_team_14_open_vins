@@ -1,8 +1,26 @@
-#include <string>
-#include <algorithm>
-#include <memory>
+/*
+ * OpenVINS: An Open Platform for Visual-Inertial Research
+ * Copyright (C) 2019 Patrick Geneva
+ * Copyright (C) 2019 Kevin Eckenhoff
+ * Copyright (C) 2019 Guoquan Huang
+ * Copyright (C) 2019 OpenVINS Contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+#ifndef OV_MSCKF_VIOMANAGER_H
+#define OV_MSCKF_VIOMANAGER_H
 
-#pragma once
 
 #include "../../invariant-ekf/include/InEKF.h"
 #include "../../invariant-ekf/include/RobotState.h"
@@ -23,12 +41,21 @@
 #include "update/UpdaterMSCKF.h"
 #include "update/UpdaterSLAM.h"
 
-// #include "conversion_utils.h"
 
-using namespace ov_msckf;
+#include<iostream>
+using namespace std;
+namespace ov_msckf {
 
-class RIEKFManager
-{
+
+
+    /**
+     * @brief Core class that manages the entire system
+     *
+     * This class contains the state and other algorithms needed for the MSCKF to work.
+     * We feed in measurements into this class and send them to their respective algorithms.
+     * If we have measurements to propagate or update with, this class will call on our state to do that.
+     */
+    class RIEKFManager {
 
 
     public:
@@ -41,7 +68,6 @@ class RIEKFManager
         RIEKFManager(ros::NodeHandle& nh);
 
         void initialize_filter(inekf::RobotState initial_state, inekf::NoiseParams noise_params);
-
         /**
          * @brief Feed function for inertial data
          * @param timestamp Time of the inertial measurement
@@ -59,7 +85,6 @@ class RIEKFManager
          */
         void feed_measurement_monocular(double timestamp, cv::Mat& img0, size_t cam_id);
 
-
         /**
          * @brief Feed function for stereo camera pair
          * @param timestamp Time that this image was collected
@@ -70,6 +95,13 @@ class RIEKFManager
          */
         void feed_measurement_stereo(double timestamp, cv::Mat& img0, cv::Mat& img1, size_t cam_id0, size_t cam_id1);
 
+        /**
+         * @brief Feed function for a synchronized simulated cameras
+         * @param timestamp Time that this image was collected
+         * @param camids Camera ids that we have simulated measurements for
+         * @param feats Raw uv simulated measurements
+         */
+        void feed_measurement_simulation(double timestamp, const std::vector<int> &camids, const std::vector<std::vector<std::pair<size_t,Eigen::VectorXf>>> &feats);
 
         /**
          * @brief Given a state, this will initialize our IMU state.
@@ -81,6 +113,26 @@ class RIEKFManager
             state->imu()->set_value(imustate.block(1,0,16,1));
             state->set_timestamp(imustate(0,0));
             is_initialized_vio = true;
+
+            Eigen::Vector3d p0 = state->imu()->pos();
+            Eigen::Vector3d v0 = state->imu()->vel();
+            Eigen::Matrix3d R0 = state->imu()->Rot();
+            Eigen::Vector3d ba0 = state->imu()->bias_a();
+            Eigen::Vector3d bg0 = state->imu()->bias_g();
+
+            filter_p_->state_.setRotation(R0);
+            filter_p_->state_.setVelocity(v0);
+            filter_p_->state_.setPosition(p0);
+            filter_p_->state_.setGyroscopeBias(bg0);
+            filter_p_->state_.setAccelerometerBias(ba0);
+
+            /*ROS_INFO("AAAAAAAAAAAAAAAAAAAAa");
+            cout << filter_p_->getState().getX() << endl;
+            cout << filter_p_->getState().getRotation()<< endl;
+            cout << filter_p_->getState().getVelocity()<< endl;
+            cout << filter_p_->getState().getPosition()<< endl;
+            cout << filter_p_->getState().getGyroscopeBias()<< endl;
+            cout << filter_p_->getState().getAccelerometerBias()<< endl;*/
 
             // Print what we init'ed with
             ROS_INFO("\033[0;32m[INIT]: INITIALIZED FROM GROUNDTRUTH FILE!!!!!\033[0m");
@@ -164,9 +216,7 @@ class RIEKFManager
             return aruco_feats;
         }
 
-
         std::shared_ptr<inekf::InEKF> filter_p_;
-
 
     protected:
 
@@ -234,4 +284,12 @@ class RIEKFManager
         std::map<size_t,bool> camera_fisheye;
         std::map<size_t,Eigen::VectorXd> camera_calib;
         std::map<size_t,std::pair<int,int>> camera_wh;
-};
+
+    };
+
+
+}
+
+
+
+#endif //OV_MSCKF_VIOMANAGER_H

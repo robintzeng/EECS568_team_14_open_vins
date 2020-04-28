@@ -9,6 +9,7 @@
 
         <!-- bag parameters -->
         <param name="path_bag"    type="string" value="/home/robin/vin_data/V1_01_easy.bag" />
+        <param name="path_gt"    type="string" value="/home/robin/catkin_pytorch/src/EECS568_team_14_open_vins/ov_data/euroc_mav/V1_01_easy.csv" />
         <param name="bag_start"   type="int"    value="0" />
         <param name="bag_durr"    type="int"    value="-1" />
 

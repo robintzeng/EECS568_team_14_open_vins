@@ -147,9 +147,8 @@ namespace ov_msckf {
 
         /// Access to IMU type
         IMU* imu() {
-            if (is_using_invariant() == true){
-                update_imu_from_filter();
-            }
+            
+            //update_imu_from_filter();
 
             return _imu;
         }

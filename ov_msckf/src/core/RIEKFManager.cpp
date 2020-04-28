@@ -1,59 +1,40 @@
-
+/*
+ * OpenVINS: An Open Platform for Visual-Inertial Research
+ * Copyright (C) 2019 Patrick Geneva
+ * Copyright (C) 2019 Kevin Eckenhoff
+ * Copyright (C) 2019 Guoquan Huang
+ * Copyright (C) 2019 OpenVINS Contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 #include "RIEKFManager.h"
+#include "types/Landmark.h"
+
+
 
 using namespace ov_core;
-
-#define DT_MIN 1e-6
-#define DT_MAX 1
-
-
-namespace conversion_utils{
-
-inekf::vectorLandmarks convert_ov_features_to_landmarks(std::vector<Feature*> features_p){
-
-
-    std::cout << "Converting ov features to landmarks " << std::endl;
-    inekf::vectorLandmarks landmarks;
-
-    for (auto feature_p: features_p){
-
-        auto id = feature_p->featid; // unique id
-        auto p_bl = feature_p->p_FinG; // position of feature in global frame
-
-        // Check if feature being tracked
-
-        inekf::Landmark landmark(id, p_bl);
-        landmarks.push_back(landmark);
-    }
-
-    std::cout << "Finished converting ov features to landmarks " << std::endl;
-
-    return landmarks;
-}
-
-}
-
+using namespace ov_msckf;
 
 void print_current_state(State* state, std::shared_ptr<inekf::InEKF> filter_p){
-    if (state->is_using_invariant() == true){
-            ROS_INFO("bias gyro = %.4f, %.4f, %.4f",filter_p->getState().getGyroscopeBias()(0),filter_p->getState().getGyroscopeBias()(1),filter_p->getState().getGyroscopeBias()(2));
-            ROS_INFO("bias accel = %.4f, %.4f, %.4f",filter_p->getState().getAccelerometerBias()(0),filter_p->getState().getAccelerometerBias()(1),filter_p->getState().getAccelerometerBias()(2));
-            ROS_INFO("velocity = %.4f, %.4f, %.4f",filter_p->getState().getVelocity()(0),filter_p->getState().getVelocity()(1),filter_p->getState().getVelocity()(2));
-            ROS_INFO("position = %.4f, %.4f, %.4f",filter_p->getState().getPosition()(0),filter_p->getState().getPosition()(1),filter_p->getState().getPosition()(2));
-
-        return;
-    }
-
-    // Debug, print our current state
-    ROS_INFO("q_GtoI = %.3f,%.3f,%.3f,%.3f | p_IinG = %.3f,%.3f,%.3f | v_IinG = %.3f,%.3f,%.3f",
-            state->imu()->quat()(0),state->imu()->quat()(1),state->imu()->quat()(2),state->imu()->quat()(3),
-            state->imu()->pos()(0),state->imu()->pos()(1),state->imu()->pos()(2),
-            state->imu()->vel()(0),state->imu()->vel()(1),state->imu()->vel()(2));
-    ROS_INFO("bg = %.4f,%.4f,%.4f | ba = %.4f,%.4f,%.4f",
-             state->imu()->bias_g()(0),state->imu()->bias_g()(1),state->imu()->bias_g()(2),
-             state->imu()->bias_a()(0),state->imu()->bias_a()(1),state->imu()->bias_a()(2));
-
+    ROS_INFO("bias gyro = %.4f, %.4f, %.4f",filter_p->getState().getGyroscopeBias()(0),filter_p->getState().getGyroscopeBias()(1),filter_p->getState().getGyroscopeBias()(2));
+    ROS_INFO("bias accel = %.4f, %.4f, %.4f",filter_p->getState().getAccelerometerBias()(0),filter_p->getState().getAccelerometerBias()(1),filter_p->getState().getAccelerometerBias()(2));
+    ROS_INFO("velocity = %.4f, %.4f, %.4f",filter_p->getState().getVelocity()(0),filter_p->getState().getVelocity()(1),filter_p->getState().getVelocity()(2));
+    ROS_INFO("position = %.4f, %.4f, %.4f",filter_p->getState().getPosition()(0),filter_p->getState().getPosition()(1),filter_p->getState().getPosition()(2));
+    return;
 }
+
+
 
 RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
 
@@ -79,8 +60,8 @@ RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
 
     // Enforce that if we are doing stereo tracking, we have two cameras
     if(state_options.num_cameras < 1) {
-        ROS_ERROR("RIEKFManager(): Specified number of cameras needs to be greater than zero");
-        ROS_ERROR("RIEKFManager(): num cameras = %d", state_options.num_cameras);
+        ROS_ERROR("VioManager(): Specified number of cameras needs to be greater than zero");
+        ROS_ERROR("VioManager(): num cameras = %d", state_options.num_cameras);
         std::exit(EXIT_FAILURE);
     }
 
@@ -96,8 +77,8 @@ RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
     else if(feat_rep_str == "ANCHORED_FULL_INVERSE_DEPTH") state_options.feat_representation = FeatureRepresentation::Representation::ANCHORED_FULL_INVERSE_DEPTH;
     else if(feat_rep_str == "ANCHORED_MSCKF_INVERSE_DEPTH") state_options.feat_representation = FeatureRepresentation::Representation::ANCHORED_MSCKF_INVERSE_DEPTH;
     else {
-        ROS_ERROR("RIEKFManager(): invalid feature representation specified = %s", feat_rep_str.c_str());
-        ROS_ERROR("RIEKFManager(): the valid types are:");
+        ROS_ERROR("VioManager(): invalid feature representation specified = %s", feat_rep_str.c_str());
+        ROS_ERROR("VioManager(): the valid types are:");
         ROS_ERROR("\t- GLOBAL_3D");
         ROS_ERROR("\t- GLOBAL_FULL_INVERSE_DEPTH");
         ROS_ERROR("\t- ANCHORED_3D");
@@ -355,10 +336,8 @@ RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
     updaterMSCKF = new UpdaterMSCKF(msckf_options, featinit_options);
     updaterSLAM = new UpdaterSLAM(slam_options, aruco_options, featinit_options);
 
-    // 
     inekf::RobotState initial_robot_state = state->get_filter_state_from_imu();
-    // inekf::RobotState initial_robot_state = conversion_utils::convert_ov_state_to_inekf_state(ov_state_p);
-
+    
     inekf::NoiseParams noise_params;
 
     noise_params.setGyroscopeNoise(imu_noises.sigma_w);
@@ -368,15 +347,13 @@ RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
     noise_params.setLandmarkNoise(0.1);
 
     initialize_filter(initial_robot_state, noise_params);
-
 }
-
-
 void RIEKFManager::initialize_filter(inekf::RobotState initial_state, inekf::NoiseParams noise_params){
     auto f = inekf::InEKF(initial_state, noise_params);
     filter_p_ = std::make_shared<inekf::InEKF>(f);
-    state->initialize_filter(filter_p_);
+    //state->initialize_filter(filter_p_);
 }
+
 
 
 void RIEKFManager::feed_measurement_imu(double timestamp, Eigen::Vector3d wm, Eigen::Vector3d am) {
@@ -419,6 +396,7 @@ void RIEKFManager::feed_measurement_monocular(double timestamp, cv::Mat& img0, s
     // Call on our propagate and update function
     do_feature_propagate_update(timestamp);
 
+
 }
 
 
@@ -444,7 +422,6 @@ void RIEKFManager::feed_measurement_stereo(double timestamp, cv::Mat& img0, cv::
     // NOTE: binocular tracking for aruco doesn't make sense as we by default have the ids
     // NOTE: thus we just call the stereo tracking if we are doing binocular!
     if(trackARUCO != nullptr) {
-        std::cout << "trackARUCO is being used " << std::endl;
         trackARUCO->feed_stereo(timestamp, img0, img1, cam_id0, cam_id1);
     }
     rT2 =  boost::posix_time::microsec_clock::local_time();
@@ -462,66 +439,78 @@ void RIEKFManager::feed_measurement_stereo(double timestamp, cv::Mat& img0, cv::
 }
 
 
+
+void RIEKFManager::feed_measurement_simulation(double timestamp, const std::vector<int> &camids, const std::vector<std::vector<std::pair<size_t,Eigen::VectorXf>>> &feats) {
+
+    // Start timing
+    rT1 =  boost::posix_time::microsec_clock::local_time();
+
+    // Check if we actually have a simulated tracker
+    TrackSIM *trackSIM = dynamic_cast<TrackSIM*>(trackFEATS);
+    if(trackSIM == nullptr) {
+        //delete trackFEATS; //(fix this error in the future)
+        trackFEATS = new TrackSIM(state->options().max_aruco_features);
+        trackFEATS->set_calibration(camera_calib, camera_fisheye);
+        ROS_ERROR("[SIM]: casting our tracker to a TrackSIM object!");
+    }
+
+    // Cast the tracker to our simulation tracker
+    trackSIM = dynamic_cast<TrackSIM*>(trackFEATS);
+    trackSIM->set_width_height(camera_wh);
+
+    // Feed our simulation tracker
+    trackSIM->feed_measurement_simulation(timestamp, camids, feats);
+    rT2 =  boost::posix_time::microsec_clock::local_time();
+
+    // If we do not have VIO initialization, then return an error
+    if(!is_initialized_vio) {
+        ROS_ERROR("[SIM]: your vio system should already be initialized before simulating features!!!");
+        ROS_ERROR("[SIM]: initialize your system first before calling feed_measurement_simulation()!!!!");
+        std::exit(EXIT_FAILURE);
+    }
+
+    // Call on our propagate and update function
+    do_feature_propagate_update(timestamp);
+
+
+}
+
+
 bool RIEKFManager::try_to_initialize() {
 
         // Returns from our initializer
         double time0;
         Eigen::Matrix<double, 4, 1> q_GtoI0;
         Eigen::Matrix<double, 3, 1> b_w0, v_I0inG, b_a0, p_I0inG;
+        
 
         // Try to initialize the system
         bool success = initializer->initialize_with_imu(time0, q_GtoI0, b_w0, v_I0inG, b_a0, p_I0inG);
-
-        
 
         // Return if it failed
         if (!success) {
             return false;
         }
 
-        if (state->is_using_invariant() == true){
-            inekf::RobotState robot_state;
+        // Make big vector (q,p,v,bg,ba), and update our state
+        // Note: start from zero position, as this is what our covariance is based off of
+        Eigen::Matrix<double,16,1> imu_val;
+        imu_val.block(0,0,4,1) = q_GtoI0;
+        imu_val.block(4,0,3,1) << 0,0,0;
+        imu_val.block(7,0,3,1) = v_I0inG;
+        imu_val.block(10,0,3,1) = b_w0;
+        imu_val.block(13,0,3,1) = b_a0;
+        //imu_val.block(10,0,3,1) << 0,0,0;
+        //imu_val.block(13,0,3,1) << 0,0,0;
+        state->imu()->set_value(imu_val);
+        state->set_timestamp(time0);
 
-            ////Finish////// 
-            Eigen::Matrix3d R0;
-            R0 = quat_2_Rot(q_GtoI0); // TODO(lowmanj)
-            robot_state.setRotation(R0);
-            //////////
-
-            robot_state.setVelocity(v_I0inG);
-            robot_state.setGyroscopeBias(b_w0);
-            robot_state.setAccelerometerBias(b_a0);
-
-            filter_p_->setState(robot_state);
-            state->set_timestamp(time0);
-            // Else we are good to go, print out our stats
-            ROS_INFO("\033[0;32m[INIT]: bias gyro = %.4f, %.4f, %.4f\033[0m",filter_p_->getState().getGyroscopeBias()(0),filter_p_->getState().getGyroscopeBias()(1),filter_p_->getState().getGyroscopeBias()(2));
-            ROS_INFO("\033[0;32m[INIT]: velocity = %.4f, %.4f, %.4f\033[0m",filter_p_->getState().getVelocity()(0),filter_p_->getState().getVelocity()(1),filter_p_->getState().getVelocity()(2));
-            ROS_INFO("\033[0;32m[INIT]: bias accel = %.4f, %.4f, %.4f\033[0m",filter_p_->getState().getAccelerometerBias()(0),filter_p_->getState().getAccelerometerBias()(1),filter_p_->getState().getAccelerometerBias()(2));
-            ROS_INFO("\033[0;32m[INIT]: position = %.4f, %.4f, %.4f\033[0m",filter_p_->getState().getPosition()(0),filter_p_->getState().getPosition()(1),filter_p_->getState().getPosition()(2));
-        }
-        else{
-            // Make big vector (q,p,v,bg,ba), and update our state
-            // Note: start from zero position, as this is what our covariance is based off of
-            Eigen::Matrix<double,16,1> imu_val;
-            imu_val.block(0,0,4,1) = q_GtoI0;
-            imu_val.block(4,0,3,1) << 0,0,0;
-            imu_val.block(7,0,3,1) = v_I0inG;
-            imu_val.block(10,0,3,1) = b_w0;
-            imu_val.block(13,0,3,1) = b_a0;
-            //imu_val.block(10,0,3,1) << 0,0,0;
-            //imu_val.block(13,0,3,1) << 0,0,0;
-            state->imu()->set_value(imu_val);
-            state->set_timestamp(time0);
-
-            // Else we are good to go, print out our stats
-            ROS_INFO("\033[0;32m[INIT]: orientation = %.4f, %.4f, %.4f, %.4f\033[0m",state->imu()->quat()(0),state->imu()->quat()(1),state->imu()->quat()(2),state->imu()->quat()(3));
-            ROS_INFO("\033[0;32m[INIT]: bias gyro = %.4f, %.4f, %.4f\033[0m",state->imu()->bias_g()(0),state->imu()->bias_g()(1),state->imu()->bias_g()(2));
-            ROS_INFO("\033[0;32m[INIT]: velocity = %.4f, %.4f, %.4f\033[0m",state->imu()->vel()(0),state->imu()->vel()(1),state->imu()->vel()(2));
-            ROS_INFO("\033[0;32m[INIT]: bias accel = %.4f, %.4f, %.4f\033[0m",state->imu()->bias_a()(0),state->imu()->bias_a()(1),state->imu()->bias_a()(2));
-            ROS_INFO("\033[0;32m[INIT]: position = %.4f, %.4f, %.4f\033[0m",state->imu()->pos()(0),state->imu()->pos()(1),state->imu()->pos()(2));
-        }
-
+        // Else we are good to go, print out our stats
+        ROS_INFO("\033[0;32m[INIT]: orientation = %.4f, %.4f, %.4f, %.4f\033[0m",state->imu()->quat()(0),state->imu()->quat()(1),state->imu()->quat()(2),state->imu()->quat()(3));
+        ROS_INFO("\033[0;32m[INIT]: bias gyro = %.4f, %.4f, %.4f\033[0m",state->imu()->bias_g()(0),state->imu()->bias_g()(1),state->imu()->bias_g()(2));
+        ROS_INFO("\033[0;32m[INIT]: velocity = %.4f, %.4f, %.4f\033[0m",state->imu()->vel()(0),state->imu()->vel()(1),state->imu()->vel()(2));
+        ROS_INFO("\033[0;32m[INIT]: bias accel = %.4f, %.4f, %.4f\033[0m",state->imu()->bias_a()(0),state->imu()->bias_a()(1),state->imu()->bias_a()(2));
+        ROS_INFO("\033[0;32m[INIT]: position = %.4f, %.4f, %.4f\033[0m",state->imu()->pos()(0),state->imu()->pos()(1),state->imu()->pos()(2));
         return true;
 
 }
@@ -529,6 +518,7 @@ bool RIEKFManager::try_to_initialize() {
 
 
 void RIEKFManager::do_feature_propagate_update(double timestamp) {
+
 
     //===================================================================================
     // State propagation, and clone augmentation
@@ -544,27 +534,17 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     if(startup_time == -1) {
         startup_time = timestamp;
     }
+    auto prop_imu_data = propagator->get_prop_imu_data(state, timestamp);
 
     // Propagate the state forward to the current update time
     // Also augment it with a new clone!
-    auto prop_imu_data = propagator->get_prop_imu_data(state, timestamp);
-    
-    auto timestamp_before = state->timestamp();
-
-    std::cout << " " << std::endl;
-    ROS_INFO("Before MSCKF prop: ");
-    print_current_state(state, filter_p_);
-    // Need to keep this because it clones
     propagator->propagate_and_clone(state, timestamp);
-    rT3 =  boost::posix_time::microsec_clock::local_time();
-    std::cout << " " << std::endl;
-    ROS_INFO("After MSCKF prop: ");
-    print_current_state(state, filter_p_);
+    
+    //////////////////////////////////////////////////////////////////////////
+    /////////// InEKF Propagation/////////////////////////////////////////////
 
-    // Reset state timestamp
-    state->set_timestamp(timestamp_before);
-
-    // InEKF Propagation
+    
+    
     auto m_last = prop_imu_data.end()[-1];
     auto m_2_last = prop_imu_data.end()[-2];
 
@@ -580,20 +560,31 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     double dt = m_last.timestamp - m_2_last.timestamp;
 
     // Update filter_p state from OV state
-    std::cout << "dt: " << dt << std::endl;
-    std::cout << "imu measurement prev: " << imu_measurement_prev << std::endl;
+    //std::cout << "dt: " << dt << std::endl;
+    //std::cout << "imu measurement prev: " << imu_measurement_prev << std::endl;
+    Eigen::Vector3d p0 = state->imu()->pos();
+    Eigen::Vector3d v0 = state->imu()->vel();
+    Eigen::Matrix3d R0 = state->imu()->Rot();
+    Eigen::Vector3d ba0 = state->imu()->bias_a();
+    Eigen::Vector3d bg0 = state->imu()->bias_g();
+
+    filter_p_->state_.setRotation(R0);
+    filter_p_->state_.setVelocity(v0);
+    filter_p_->state_.setPosition(p0);
+    filter_p_->state_.setGyroscopeBias(bg0);
+    filter_p_->state_.setAccelerometerBias(ba0);
 
     // filter_p_->setState(robot_state);
-    filter_p_->Propagate(imu_measurement_prev, dt);
-
-    // Update OV state with inekf State params
-    state->set_timestamp(timestamp);
-
-    std::cout << " " << std::endl;
-    ROS_INFO("After InEKF prop: ");
+    filter_p_->Propagate(imu_measurement_prev, dt,false);
+    
     print_current_state(state, filter_p_);
 
+    ////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+    
+    rT3 =  boost::posix_time::microsec_clock::local_time();
 
+    
     // If we have not reached max clones, we should just return...
     // This isn't super ideal, but it keeps the logic after this easier...
     // We can start processing things when we have at least 5 clones since we can start triangulating things...
@@ -601,8 +592,6 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
         ROS_INFO("waiting for enough clone states (%d of %d) ....",(int)state->n_clones(),std::min(state->options().max_clone_size,5));
         return;
     }
-
-    ROS_INFO("Enough clone states!");
 
     // Return if we where unable to propagate
     if(state->timestamp() != timestamp) {
@@ -723,41 +712,45 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     // Now that we have a list of features, lets do the EKF update for MSCKF and SLAM!
     //===================================================================================
 
-    // Note: This is a hack to put the landmarks into the state. Then we can use
-    // the landmarks for an inekf update step instead of the normal EKF update
-    // when we call updaterMSCKF->update(state, featsup_MSCKF); below
-    // InEKF update using MSCKF Landmarks
-    // FeatureDatabase* feats_db = trackFEATS->get_feature_database();
-    // FeatureDatabase* aruco_db = trackARUCO->get_feature_database();
-
-    // if (feats_db!=nullptr){
-    //     std::cout << "Size of feats_db: " << feats_db->size() << std::endl;
-    // }
-    // if (aruco_db!=nullptr){
-    //     std::cout << "Size of aruco_db: " << aruco_db->size() << std::endl;
-    // }
-
-
-    inekf::vectorLandmarks measured_landmarks = conversion_utils::convert_ov_features_to_landmarks(featsup_MSCKF);
-    // inekf::vectorLandmarks subset_landmarks;
-
-    // int num_landmarks = measured_landmarks.size();
-    // if (measured_landmarks.size() > 100){
-    //     num_landmarks = 100;
-    // }
-
-    // for (int ind=0; ind < num_landmarks; ind++){
-    //     subset_landmarks.push_back(measured_landmarks.at(ind));
-    // }
-
-    state->update_inekf_landmarks(measured_landmarks);
-
-
     // Pass them to our MSCKF updater
     // We update first so that our SLAM initialization will be more accurate??
-    updaterMSCKF->update(state, featsup_MSCKF);
-    rT4 =  boost::posix_time::microsec_clock::local_time();
+    
 
+
+
+
+
+
+
+
+
+
+
+
+    /////////////////////////Correction///////////////////////////////////////////////////
+    //updaterMSCKF->update(state, featsup_MSCKF);
+    
+    updaterMSCKF->update(state, filter_p_ ,featsup_MSCKF);
+    print_current_state(state, filter_p_);
+
+    ///////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    rT4 =  boost::posix_time::microsec_clock::local_time();
 
     // Perform SLAM delay init and update
     updaterSLAM->update(state, feats_slam_UPDATE);
@@ -833,21 +826,18 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
     // Update our distance traveled
     if(timelastupdate != -1 && state->get_clones().find(timelastupdate) != state->get_clones().end()) {
-        Eigen::Matrix<double,3,1> p1;
-        if (state->is_using_invariant() == true){
-            p1 = filter_p_->getState().getPosition();
-        }
-        else{
-            p1 = state->imu()->pos();
-        }
-
-        Eigen::Matrix<double,3,1> dx = p1 - state->get_clone(timelastupdate)->pos();
+        Eigen::Matrix<double,3,1> dx = state->imu()->pos() - state->get_clone(timelastupdate)->pos();
         distance += dx.norm();
     }
     timelastupdate = timestamp;
 
-    ROS_INFO("dist = %.2f (meters)", distance);
-    print_current_state(state, filter_p_);
+    // Debug, print our current state
+    ROS_INFO("q_GtoI = %.3f,%.3f,%.3f,%.3f | p_IinG = %.3f,%.3f,%.3f | dist = %.2f (meters)",
+            state->imu()->quat()(0),state->imu()->quat()(1),state->imu()->quat()(2),state->imu()->quat()(3),
+            state->imu()->pos()(0),state->imu()->pos()(1),state->imu()->pos()(2),distance);
+    ROS_INFO("bg = %.4f,%.4f,%.4f | ba = %.4f,%.4f,%.4f",
+             state->imu()->bias_g()(0),state->imu()->bias_g()(1),state->imu()->bias_g()(2),
+             state->imu()->bias_a()(0),state->imu()->bias_a()(1),state->imu()->bias_a()(2));
 
 
     // Debug for camera imu offset
@@ -874,6 +864,9 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
                      calib->pos()(0),calib->pos()(1),calib->pos()(2));
         }
     }
+
+
+
 
 
 }

@@ -68,8 +68,7 @@ namespace ov_msckf {
          * @param sim Simulator if we are simulating
          */
         RosVisualizer(ros::NodeHandle &nh, VioManager* app, Simulator* sim=nullptr);
-
-
+        
         /**
          * @brief Will visualize the system if we have new things
          */
