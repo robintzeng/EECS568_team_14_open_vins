@@ -25,7 +25,141 @@
 using namespace ov_core;
 using namespace ov_msckf;
 
+<<<<<<< HEAD
 void UpdaterMSCKF::update(State *state, std::vector<Feature*>& feature_vec) {
+=======
+////////////inekf////////////////
+inekf::vectorLandmarks convert_ov_features_to_landmarks(std::vector<Feature*> features_p){
+    std::cout << "Converting ov features to landmarks " << std::endl;
+    inekf::vectorLandmarks landmarks;
+    int i = 0 ;
+    for (auto feature_p: features_p){
+
+        auto id = feature_p->featid; // unique id
+        auto p_bl = feature_p->p_FinG; // position of feature in global frame
+
+        // Check if feature being tracked
+
+        inekf::Landmark landmark(id, p_bl);
+        if(i%5 == 1){
+            ROS_INFO("ININ %d",i);
+            landmarks.push_back(landmark);
+        }
+        i++;
+    }
+
+    std::cout << "Finished converting ov features to landmarks " << std::endl;
+
+    return landmarks;
+}
+
+void UpdaterMSCKF::update(State *state,std::shared_ptr<inekf::InEKF> filter_p_, std::vector<Feature*>& feature_vec) {
+
+    // Return if no features
+    if(feature_vec.empty())
+        return;
+
+    // Start timing
+    boost::posix_time::ptime rT0, rT1, rT2, rT3, rT4, rT5, rT6, rT7;
+    rT0 =  boost::posix_time::microsec_clock::local_time();
+
+    // 0. Get all timestamps our clones are at (and thus valid measurement times)
+    std::vector<double> clonetimes;
+    for(const auto& clone_imu : state->get_clones()) {
+        clonetimes.emplace_back(clone_imu.first);
+    }
+
+
+    // 1. Clean all feature measurements and make sure they all have valid clone times
+    auto it0 = feature_vec.begin();
+    while(it0 != feature_vec.end()) {
+
+        // Clean the feature
+        (*it0)->clean_old_measurements(clonetimes);
+
+        // Count how many measurements
+        int ct_meas = 0;
+        for(const auto &pair : (*it0)->timestamps) {
+            ct_meas += (*it0)->timestamps[pair.first].size();
+        }
+
+        // Remove if we don't have enough
+        if(ct_meas < 3) {
+            (*it0)->to_delete = true;
+            it0 = feature_vec.erase(it0);
+        } else {
+            it0++;
+        }
+
+    }
+    rT1 =  boost::posix_time::microsec_clock::local_time();
+
+    // 2. Create vector of cloned *CAMERA* poses at each of our clone timesteps
+    std::unordered_map<size_t, std::unordered_map<double, FeatureInitializer::ClonePose>> clones_cam;
+    for(const auto &clone_calib : state->get_calib_IMUtoCAMs()) {
+
+        // For this camera, create the vector of camera poses
+        std::unordered_map<double, FeatureInitializer::ClonePose> clones_cami;
+        for(const auto &clone_imu : state->get_clones()) {
+
+            // Get current camera pose
+            Eigen::Matrix<double,3,3> R_GtoCi = clone_calib.second->Rot()*clone_imu.second->Rot();
+            Eigen::Matrix<double,3,1> p_CioinG = clone_imu.second->pos() - R_GtoCi.transpose()*clone_calib.second->pos();
+
+            // Append to our map
+            clones_cami.insert({clone_imu.first,FeatureInitializer::ClonePose(R_GtoCi,p_CioinG)});
+
+        }
+
+        // Append to our map
+        clones_cam.insert({clone_calib.first,clones_cami});
+
+    }
+
+    // 3. Try to triangulate all MSCKF or new SLAM features that have measurements
+    auto it1 = feature_vec.begin();
+    while(it1 != feature_vec.end()) {
+
+        // Triangulate the feature and remove if it fails
+        bool success = initializer_feat->single_triangulation(*it1, clones_cam);
+        if(!success) {
+            (*it1)->to_delete = true;
+            it1 = feature_vec.erase(it1);
+            continue;
+        }
+
+        // Gauss-newton refine the feature
+        success = initializer_feat->single_gaussnewton(*it1, clones_cam);
+        if(!success) {
+            (*it1)->to_delete = true;
+            it1 = feature_vec.erase(it1);
+            continue;
+        }
+        it1++;
+
+    }
+
+    inekf::vectorLandmarks measured_landmarks = convert_ov_features_to_landmarks(feature_vec);
+    filter_p_->CorrectLandmarks(measured_landmarks);
+
+    auto new_q =  rot_2_quat(filter_p_->getState().getRotation());
+    auto new_v =  filter_p_->getState().getVelocity();
+    auto new_p = filter_p_->getState().getPosition();
+
+    Eigen::Matrix<double,16,1> imu_x = state->imu()->value();
+    imu_x.block(0,0,4,1) = new_q;
+    imu_x.block(4,0,3,1) = new_p;
+    imu_x.block(7,0,3,1) = new_v;
+    state->imu()->set_value(imu_x);
+    state->imu()->set_fej(imu_x);
+
+   }
+
+
+
+
+void UpdaterMSCKF::update(State *state, std::vector<Feature*>& feature_vec){
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
 
     // Return if no features
     if(feature_vec.empty())

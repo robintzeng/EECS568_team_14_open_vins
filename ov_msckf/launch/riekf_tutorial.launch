@@ -8,8 +8,14 @@
         <param name="topic_camera1"  type="string" value="/cam1/image_raw" />
 
         <!-- bag parameters -->
+<<<<<<< HEAD
         <param name="path_bag"    type="string" value="/home/robin/vin_data/V1_01_easy.bag" />
         <param name="path_gt"    type="string" value="/home/robin/catkin_pytorch/src/EECS568_team_14_open_vins/ov_data/euroc_mav/V1_01_easy.csv" />
+=======
+        <param name="path_bag"    type="string" value="/home/lowmanj/datasets/eth/V1_01_easy.bag" />
+        <param name="path_gt"    type="string" value="/home/lowmanj/mobrob_project/workspace/catkin_ws_ov/src/EECS568_team_14_open_vins/ov_data/euroc_mav/V1_01_easy.csv" />
+
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
         <param name="bag_start"   type="int"    value="0" />
         <param name="bag_durr"    type="int"    value="-1" />
 

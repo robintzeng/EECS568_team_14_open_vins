@@ -21,6 +21,65 @@
 
 namespace inekf {
 
+<<<<<<< HEAD
+=======
+class CameraPose{
+    public:
+        CameraPose(const Eigen::MatrixXd& R, const Eigen::VectorXd& pos) :
+        R_(R), pos_(pos){}
+
+        void setRotation(Eigen::MatrixXd new_R) {
+            assert (new_R.rows() == R_.rows());
+            assert (new_R.cols() == R_.cols());
+            R_ = new_R;
+        }
+
+        void setPosition(Eigen::VectorXd new_pos) {
+            assert (new_pos.rows() == pos_.rows());
+            assert (new_pos.cols() == pos_.cols());
+            pos_ = new_pos;
+        }
+
+        Eigen::MatrixXd getRotation() const{
+            return R_;
+        }
+
+        Eigen::VectorXd getPosition() const{
+            return pos_;
+        }
+    private:
+        Eigen::MatrixXd R_;
+        Eigen::VectorXd pos_;
+};
+
+
+
+class VisualFeature
+{
+public:
+    VisualFeature();
+    VisualFeature(const VisualFeature& orig);
+
+    ~VisualFeature(){}
+
+    Eigen::Vector3d getPosition() const;
+
+    void setPosition(Eigen::Vector3d new_pos);
+
+    std::vector<CameraPose> poses_seen_from_;
+
+    VisualFeature& operator=(const VisualFeature& orig);
+    int id_;
+
+protected:
+    static int nextID;
+
+private:
+    Eigen::Vector3d pos_;
+};
+
+
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
 class RobotState {
 
     public:

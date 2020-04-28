@@ -306,8 +306,11 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
     vectorLandmarks new_landmarks;
     vector<int> used_landmark_ids;
     
+<<<<<<< HEAD
     
 
+=======
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
     for (vectorLandmarksIterator it=measured_landmarks.begin(); it!=measured_landmarks.end(); ++it) {
         // Detect and skip if an ID is not unique (this would cause singularity issues in InEKF::Correct)
         if (find(used_landmark_ids.begin(), used_landmark_ids.end(), it->id) != used_landmark_ids.end()) { 
@@ -321,7 +324,10 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
         mapIntVector3dIterator it_prior = prior_landmarks_.find(it->id);
         map<int,int>::iterator it_estimated = estimated_landmarks_.find(it->id);
         if (it_prior!=prior_landmarks_.end()) {
+<<<<<<< HEAD
             cout << "A"  << endl;
+=======
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
             // Found in prior landmark set
             int dimX = state_.dimX();
             int dimP = state_.dimP();
@@ -364,8 +370,12 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
             PI.block(startIndex,startIndex2,3,dimX) = Eigen::MatrixXd::Zero(3,dimX);
             PI.block(startIndex,startIndex2,3,3) = Eigen::Matrix3d::Identity();
 
+<<<<<<< HEAD
         } else if (it_estimated!=estimated_landmarks_.end()) {
             cout << "B"  << endl;
+=======
+        } else if (it_estimated!=estimated_landmarks_.end()) {;
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
             // Found in estimated landmark set
             int dimX = state_.dimX();
             int dimP = state_.dimP();
@@ -411,7 +421,10 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
 
 
         } else {
+<<<<<<< HEAD
             cout << "C"  << endl;
+=======
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
             // First time landmark as been detected (add to list for later state augmentation)
             new_landmarks.push_back(*it);
         }
@@ -425,7 +438,10 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
 
     // Augment state with newly detected landmarks
     if (new_landmarks.size() > 0) {
+<<<<<<< HEAD
         
+=======
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
         Eigen::MatrixXd X_aug = state_.getX(); 
         Eigen::MatrixXd P_aug = state_.getP();
         Eigen::Vector3d p = state_.getPosition();
@@ -448,7 +464,10 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
             P_aug = (F*P_aug*F.transpose() + G*noise_params_.getLandmarkCov()*G.transpose()).eval();
 
             // Update state and covariance
+<<<<<<< HEAD
             cout << "D"  << endl;
+=======
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
             state_.setX(X_aug);
             state_.setP(P_aug);
 

@@ -26,6 +26,9 @@
 #include "utils/quat_ops.h"
 #include <ros/ros.h>
 
+#include "../../invariant-ekf/include/RobotState.h"
+
+
 using namespace ov_core;
 
 
@@ -139,6 +142,10 @@ namespace ov_msckf {
          * @param timestamp Time to propagate to and clone at
          */
         void propagate_and_clone(State *state, double timestamp);
+<<<<<<< HEAD
+=======
+
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
         void propagate_and_clone(State *state, std::shared_ptr<inekf::InEKF> filter_p_,double timestamp);
 
         /**
@@ -203,6 +210,7 @@ namespace ov_msckf {
          */
         void predict_and_compute(State *state, const IMUDATA data_minus, const IMUDATA data_plus,
                                  Eigen::Matrix<double, 15, 15> &F, Eigen::Matrix<double, 15, 15> &Qd);
+
 
         /**
          * @brief Discrete imu mean propagation.

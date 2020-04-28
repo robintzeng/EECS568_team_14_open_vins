@@ -28,7 +28,7 @@
 #include <std_msgs/Float64.h>
 #include <cv_bridge/cv_bridge.h>
 
-#include "core/VioManager.h"
+#include "core/RIEKFManager.h"
 #include "core/RosVisualizer.h"
 #include "utils/dataset_reader.h"
 
@@ -36,7 +36,7 @@
 using namespace ov_msckf;
 
 
-VioManager* sys;
+RIEKFManager* sys;
 RosVisualizer* viz;
 
 
@@ -49,7 +49,7 @@ int main(int argc, char** argv)
     ros::NodeHandle nh("~");
 
     // Create our VIO system
-    sys = new VioManager(nh);
+    sys = new RIEKFManager(nh);
     viz = new RosVisualizer(nh, sys);
 
 
@@ -69,18 +69,22 @@ int main(int argc, char** argv)
 
     // Location of the ROS bag we want to read in
     std::string path_to_bag;
-    //nhPrivate.param<std::string>("path_bag", path_to_bag, "/home/keck/catkin_ws/V1_01_easy.bag");
-    nh.param<std::string>("path_bag", path_to_bag, "/home/lowmanj/datasets/uzh_fpv/indoor_forward_3_davis_with_gt.bag");
+    nh.param<std::string>("path_bag", path_to_bag, "/home/lowmanj/datasets/uzh_fpv/indoor_forward_3_snapdragon_with_gt.bag");
     ROS_INFO("ros bag path is: %s", path_to_bag.c_str());
 
     // Load groundtruth if we have it
     std::map<double, Eigen::Matrix<double, 17, 1>> gt_states;
     if (nh.hasParam("path_gt")) {
+        ROS_INFO("Has path_gt....");
+        // return 0;
+
         std::string path_to_gt;
         nh.param<std::string>("path_gt", path_to_gt, "");
         DatasetReader::load_gt_file(path_to_gt, gt_states);
         ROS_INFO("gt file path is: %s", path_to_gt.c_str());
     }
+
+    // return 0;
 
     // Get our start location and how much of the bag we want to play
     // Make the bag duration < 0 to just process to the end of the bag
@@ -148,6 +152,19 @@ int main(int argc, char** argv)
         // If ros is wants us to stop, break out
         if (!ros::ok())
             break;
+
+        // Handle Ground Truth
+        sensor_msgs::Imu::ConstPtr s2 = m.instantiate<sensor_msgs::Imu>();
+        if (s2 != NULL && m.getTopic() == topic_gt_odom) {
+            // convert into correct format
+            double timem = (*s2).header.stamp.toSec();
+            Eigen::Matrix<double, 3, 1> wm, am;
+            wm << (*s2).angular_velocity.x, (*s2).angular_velocity.y, (*s2).angular_velocity.z;
+            am << (*s2).linear_acceleration.x, (*s2).linear_acceleration.y, (*s2).linear_acceleration.z;
+            // send it to our VIO system
+            sys->feed_measurement_imu(timem, wm, am);
+        }
+
 
         // Handle IMU measurement
         sensor_msgs::Imu::ConstPtr s2 = m.instantiate<sensor_msgs::Imu>();

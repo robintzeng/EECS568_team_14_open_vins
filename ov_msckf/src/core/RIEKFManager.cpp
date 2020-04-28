@@ -538,6 +538,7 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
     // Propagate the state forward to the current update time
     // Also augment it with a new clone!
+<<<<<<< HEAD
     propagator->propagate_and_clone(state, timestamp);
     
     //////////////////////////////////////////////////////////////////////////
@@ -582,6 +583,11 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     ////////////////////////////////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////
     
+=======
+    auto prop_imu_data = propagator->get_prop_imu_data(state, timestamp);
+
+    propagator->propagate_and_clone(state, timestamp);
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
     rT3 =  boost::posix_time::microsec_clock::local_time();
 
     
@@ -714,6 +720,7 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
     // Pass them to our MSCKF updater
     // We update first so that our SLAM initialization will be more accurate??
+<<<<<<< HEAD
     
 
 
@@ -723,6 +730,10 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
 
 
+=======
+    updaterMSCKF->update(state, filter_p_, featsup_MSCKF);
+    rT4 =  boost::posix_time::microsec_clock::local_time();
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
 
 
 
@@ -826,11 +837,18 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
     // Update our distance traveled
     if(timelastupdate != -1 && state->get_clones().find(timelastupdate) != state->get_clones().end()) {
+<<<<<<< HEAD
         Eigen::Matrix<double,3,1> dx = state->imu()->pos() - state->get_clone(timelastupdate)->pos();
+=======
+        auto p1 = state->imu()->pos();
+
+        Eigen::Matrix<double,3,1> dx = p1 - state->get_clone(timelastupdate)->pos();
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
         distance += dx.norm();
     }
     timelastupdate = timestamp;
 
+<<<<<<< HEAD
     // Debug, print our current state
     ROS_INFO("q_GtoI = %.3f,%.3f,%.3f,%.3f | p_IinG = %.3f,%.3f,%.3f | dist = %.2f (meters)",
             state->imu()->quat()(0),state->imu()->quat()(1),state->imu()->quat()(2),state->imu()->quat()(3),
@@ -838,6 +856,9 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     ROS_INFO("bg = %.4f,%.4f,%.4f | ba = %.4f,%.4f,%.4f",
              state->imu()->bias_g()(0),state->imu()->bias_g()(1),state->imu()->bias_g()(2),
              state->imu()->bias_a()(0),state->imu()->bias_a()(1),state->imu()->bias_a()(2));
+=======
+    ROS_INFO("dist = %.2f (meters)", distance);
+>>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
 
 
     // Debug for camera imu offset
