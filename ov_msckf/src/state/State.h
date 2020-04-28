@@ -148,12 +148,7 @@ namespace ov_msckf {
 
         /// Access to IMU type
         IMU* imu() {
-<<<<<<< HEAD
-            
             //update_imu_from_filter();
-
-=======
->>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
             return _imu;
         }
 

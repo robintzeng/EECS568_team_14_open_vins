@@ -142,10 +142,7 @@ namespace ov_msckf {
          * @param timestamp Time to propagate to and clone at
          */
         void propagate_and_clone(State *state, double timestamp);
-<<<<<<< HEAD
-=======
 
->>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
         void propagate_and_clone(State *state, std::shared_ptr<inekf::InEKF> filter_p_,double timestamp);
 
         /**

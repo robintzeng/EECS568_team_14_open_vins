@@ -337,7 +337,7 @@ RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
     updaterSLAM = new UpdaterSLAM(slam_options, aruco_options, featinit_options);
 
     inekf::RobotState initial_robot_state = state->get_filter_state_from_imu();
-    
+
     inekf::NoiseParams noise_params;
 
     noise_params.setGyroscopeNoise(imu_noises.sigma_w);
@@ -482,7 +482,7 @@ bool RIEKFManager::try_to_initialize() {
         double time0;
         Eigen::Matrix<double, 4, 1> q_GtoI0;
         Eigen::Matrix<double, 3, 1> b_w0, v_I0inG, b_a0, p_I0inG;
-        
+
 
         // Try to initialize the system
         bool success = initializer->initialize_with_imu(time0, q_GtoI0, b_w0, v_I0inG, b_a0, p_I0inG);
@@ -538,31 +538,8 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
     // Propagate the state forward to the current update time
     // Also augment it with a new clone!
-<<<<<<< HEAD
     propagator->propagate_and_clone(state, timestamp);
-    
-    //////////////////////////////////////////////////////////////////////////
-    /////////// InEKF Propagation/////////////////////////////////////////////
 
-    
-    
-    auto m_last = prop_imu_data.end()[-1];
-    auto m_2_last = prop_imu_data.end()[-2];
-
-    Eigen::Matrix<double,6,1> imu_measurement_prev = Eigen::Matrix<double,6,1>::Zero();
-    Eigen::Matrix<double,6,1> imu_measurement = Eigen::Matrix<double,6,1>::Zero();
-
-    imu_measurement_prev << m_2_last.wm[0], m_2_last.wm[1], m_2_last.wm[2],
-                             m_2_last.am[0], m_2_last.am[1], m_2_last.am[2];
-
-    imu_measurement << m_last.wm[0], m_last.wm[1], m_last.wm[2],
-                       m_last.am[0], m_last.am[1], m_last.am[2];
-
-    double dt = m_last.timestamp - m_2_last.timestamp;
-
-    // Update filter_p state from OV state
-    //std::cout << "dt: " << dt << std::endl;
-    //std::cout << "imu measurement prev: " << imu_measurement_prev << std::endl;
     Eigen::Vector3d p0 = state->imu()->pos();
     Eigen::Vector3d v0 = state->imu()->vel();
     Eigen::Matrix3d R0 = state->imu()->Rot();
@@ -576,21 +553,12 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     filter_p_->state_.setAccelerometerBias(ba0);
 
     // filter_p_->setState(robot_state);
-    filter_p_->Propagate(imu_measurement_prev, dt,false);
-    
-    print_current_state(state, filter_p_);
+    // filter_p_->Propagate(imu_measurement_prev, dt,false);
 
-    ////////////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////
-    
-=======
-    auto prop_imu_data = propagator->get_prop_imu_data(state, timestamp);
 
-    propagator->propagate_and_clone(state, timestamp);
->>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
     rT3 =  boost::posix_time::microsec_clock::local_time();
 
-    
+
     // If we have not reached max clones, we should just return...
     // This isn't super ideal, but it keeps the logic after this easier...
     // We can start processing things when we have at least 5 clones since we can start triangulating things...
@@ -720,48 +688,10 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
     // Pass them to our MSCKF updater
     // We update first so that our SLAM initialization will be more accurate??
-<<<<<<< HEAD
-    
 
-
-
-
-
-
-
-
-=======
     updaterMSCKF->update(state, filter_p_, featsup_MSCKF);
     rT4 =  boost::posix_time::microsec_clock::local_time();
->>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
 
-
-
-
-    /////////////////////////Correction///////////////////////////////////////////////////
-    //updaterMSCKF->update(state, featsup_MSCKF);
-    
-    updaterMSCKF->update(state, filter_p_ ,featsup_MSCKF);
-    print_current_state(state, filter_p_);
-
-    ///////////////////////////////////////////////////////////////////////////////
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    rT4 =  boost::posix_time::microsec_clock::local_time();
 
     // Perform SLAM delay init and update
     updaterSLAM->update(state, feats_slam_UPDATE);
@@ -837,18 +767,12 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
     // Update our distance traveled
     if(timelastupdate != -1 && state->get_clones().find(timelastupdate) != state->get_clones().end()) {
-<<<<<<< HEAD
         Eigen::Matrix<double,3,1> dx = state->imu()->pos() - state->get_clone(timelastupdate)->pos();
-=======
-        auto p1 = state->imu()->pos();
 
-        Eigen::Matrix<double,3,1> dx = p1 - state->get_clone(timelastupdate)->pos();
->>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
         distance += dx.norm();
     }
     timelastupdate = timestamp;
 
-<<<<<<< HEAD
     // Debug, print our current state
     ROS_INFO("q_GtoI = %.3f,%.3f,%.3f,%.3f | p_IinG = %.3f,%.3f,%.3f | dist = %.2f (meters)",
             state->imu()->quat()(0),state->imu()->quat()(1),state->imu()->quat()(2),state->imu()->quat()(3),
@@ -856,9 +780,7 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
     ROS_INFO("bg = %.4f,%.4f,%.4f | ba = %.4f,%.4f,%.4f",
              state->imu()->bias_g()(0),state->imu()->bias_g()(1),state->imu()->bias_g()(2),
              state->imu()->bias_a()(0),state->imu()->bias_a()(1),state->imu()->bias_a()(2));
-=======
-    ROS_INFO("dist = %.2f (meters)", distance);
->>>>>>> 8127fe826f45f514bb8bf34df7e340a0ed2d0a8b
+
 
 
     // Debug for camera imu offset
