@@ -7,12 +7,12 @@
 /**
  *  @file   InEKF.h
  *  @author Ross Hartley
- *  @brief  Header file for Invariant EKF 
+ *  @brief  Header file for Invariant EKF
  *  @date   September 25, 2018
  **/
 
 #ifndef INEKF_H
-#define INEKF_H 
+#define INEKF_H
 #include <Eigen/Dense>
 #include <iostream>
 #include <vector>
@@ -66,12 +66,12 @@ class Observation {
         Eigen::MatrixXd N;
         Eigen::MatrixXd PI;
 
-        friend std::ostream& operator<<(std::ostream& os, const Observation& o);  
+        friend std::ostream& operator<<(std::ostream& os, const Observation& o);
 };
 
 
 class InEKF {
-    
+
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         InEKF();
@@ -91,12 +91,12 @@ class InEKF {
         void setContacts(std::vector<std::pair<int,bool> > contacts);
 
         void Propagate(const Eigen::Matrix<double,6,1>& m, double dt);
-        void Propagate(const Eigen::Matrix<double,6,1>& m, double dt,bool x); 
+        void PropagateCovariance(double dt);
         void Correct(const Observation& obs);
         void CorrectLandmarks(const vectorLandmarks& measured_landmarks);
         void CorrectKinematics(const vectorKinematics& measured_kinematics);
 
-    
+
         RobotState state_;
         private:
         NoiseParams noise_params_;
@@ -112,4 +112,4 @@ class InEKF {
 };
 
 } // end inekf namespace
-#endif 
+#endif

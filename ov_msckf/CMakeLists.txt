@@ -73,8 +73,8 @@ add_library(ov_msckf_lib
         src/state/State.cpp
         src/state/StateHelper.cpp
         src/state/Propagator.cpp
-        src/core/VioManager.cpp
-        src/core/RosVisualizer.cpp
+         src/core/VioManager.cpp
+         src/core/RosVisualizer.cpp
         src/core/RIEKFManager.cpp
         src/core/RIEKFVisualizer.cpp
         src/update/UpdaterHelper.cpp
@@ -90,11 +90,11 @@ target_link_libraries(ov_msckf_lib ${thirdparty_libraries})
 add_executable(run_serial_msckf src/run_serial_msckf.cpp)
 target_link_libraries(run_serial_msckf ov_msckf_lib ${thirdparty_libraries})
 
-add_executable(run_simulation src/run_simulation.cpp)
-target_link_libraries(run_simulation ov_msckf_lib ${thirdparty_libraries})
+# add_executable(run_simulation src/run_simulation.cpp)
+# target_link_libraries(run_simulation ov_msckf_lib ${thirdparty_libraries})
 
-add_executable(run_subscribe_msckf src/run_subscribe_msckf.cpp)
-target_link_libraries(run_subscribe_msckf ov_msckf_lib ${thirdparty_libraries})
+# add_executable(run_subscribe_msckf src/run_subscribe_msckf.cpp)
+# target_link_libraries(run_subscribe_msckf ov_msckf_lib ${thirdparty_libraries})
 
 add_executable(run_serial_riekf src/run_serial_riekf.cpp)
 target_link_libraries(run_serial_riekf ov_msckf_lib ${thirdparty_libraries})

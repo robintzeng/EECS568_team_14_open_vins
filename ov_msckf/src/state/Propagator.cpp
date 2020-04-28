@@ -552,7 +552,14 @@ void Propagator:: propagate_and_clone(State *state, std::shared_ptr<inekf::InEKF
         filter_p_->state_.setVelocity(new_v);
         filter_p_->state_.setPosition(new_p);
 
-        filter_p_->Propagate(imu_measurement_prev, dt,false);
+        Eigen::Vector3d accel_bias = state->imu()->bias_a();
+        Eigen::Vector3d gyro_bias = state->imu()->bias_g();
+        filter_p_->state_.setGyroscopeBias(gyro_bias);
+        filter_p_->state_.setAccelerometerBias(accel_bias);
+
+        // ROS_INFO("Size of vins covariance: %d", state->n_vars());
+        // ROS_INFO("Size of filter covariance: %d", filter_p_->getState().dimP());
+        filter_p_->PropagateCovariance(dt);
 
 
         Eigen::Matrix<double,16,1> imu_x = state->imu()->value();
@@ -561,6 +568,7 @@ void Propagator:: propagate_and_clone(State *state, std::shared_ptr<inekf::InEKF
         imu_x.block(7,0,3,1) = new_v;
         state->imu()->set_value(imu_x);
         state->imu()->set_fej(imu_x);
+
         // Next we should propagate our IMU covariance
         // Pii' = F*Pii*F.transpose() + G*Q*G.transpose()
         // Pci' = F*Pci and Pic' = Pic*F.transpose()
@@ -577,17 +585,17 @@ void Propagator:: propagate_and_clone(State *state, std::shared_ptr<inekf::InEKF
     Eigen::Matrix<double,3,1> last_w = prop_data.at(prop_data.size()-2).wm - state->imu()->bias_g();
 
     // For now assert that our IMU is at the top left of the covariance
-    assert(state->imu()->id()==0);
+    // assert(state->imu()->id()==0);
 
     // Do the update to the covariance with our "summed" state transition and IMU noise addition...
-    //auto &Cov = state->Cov();
-    //size_t imu_id = state->imu()->id();
-    //Cov.block(imu_id,0,15,state->n_vars()) = Phi_summed*Cov.block(imu_id,0,15,state->n_vars());
-    //Cov.block(0,imu_id,state->n_vars(),15) = Cov.block(0,imu_id,state->n_vars(),15)*Phi_summed.transpose();
-    //Cov.block(imu_id,imu_id,15,15) += Qd_summed;
+    // auto &Cov = state->Cov();
+    // size_t imu_id = state->imu()->id();
+    // Cov.block(0,0, 15,state->n_vars()) = Phi_summed*Cov.block(0,0, 15,state->n_vars());
+    // Cov.block(0,0, state->n_vars(),15) = Cov.block(0,0, state->n_vars(),15)*Phi_summed.transpose();
+    // Cov.block(0,0, 15,15) += Qd_summed;
 
     // Ensure the covariance is symmetric
-    //Cov = 0.5*(Cov+Cov.transpose());
+    // Cov = 0.5*(Cov+Cov.transpose());
 
     // Set timestamp data
     state->set_timestamp(timestamp);

@@ -348,10 +348,25 @@ RIEKFManager::RIEKFManager(ros::NodeHandle &nh) {
 
     initialize_filter(initial_robot_state, noise_params);
 }
+
 void RIEKFManager::initialize_filter(inekf::RobotState initial_state, inekf::NoiseParams noise_params){
     auto f = inekf::InEKF(initial_state, noise_params);
     filter_p_ = std::make_shared<inekf::InEKF>(f);
     //state->initialize_filter(filter_p_);
+
+    auto state_p = get_state();
+
+    Eigen::Matrix3d R0 = state_p->imu()->Rot();
+    Eigen::Vector3d v0 = state_p->imu()->vel();
+    Eigen::Vector3d p0 = state_p->imu()->pos();
+    Eigen::Vector3d ba0 = state_p->imu()->bias_a();
+    Eigen::Vector3d bg0 = state_p->imu()->bias_g();
+
+    filter_p_->state_.setRotation(R0);
+    filter_p_->state_.setVelocity(v0);
+    filter_p_->state_.setPosition(p0);
+    filter_p_->state_.setGyroscopeBias(bg0);
+    filter_p_->state_.setAccelerometerBias(ba0);
 }
 
 
@@ -505,6 +520,14 @@ bool RIEKFManager::try_to_initialize() {
         state->imu()->set_value(imu_val);
         state->set_timestamp(time0);
 
+        Eigen::Vector3d p_start = Eigen::Vector3d::Zero();
+        filter_p_->state_.setRotation(quat_2_Rot(q_GtoI0));
+        filter_p_->state_.setVelocity(v_I0inG);
+        filter_p_->state_.setPosition(p_start);
+
+        filter_p_->state_.setGyroscopeBias(b_w0);
+        filter_p_->state_.setAccelerometerBias(b_a0);
+
         // Else we are good to go, print out our stats
         ROS_INFO("\033[0;32m[INIT]: orientation = %.4f, %.4f, %.4f, %.4f\033[0m",state->imu()->quat()(0),state->imu()->quat()(1),state->imu()->quat()(2),state->imu()->quat()(3));
         ROS_INFO("\033[0;32m[INIT]: bias gyro = %.4f, %.4f, %.4f\033[0m",state->imu()->bias_g()(0),state->imu()->bias_g()(1),state->imu()->bias_g()(2));
@@ -538,24 +561,8 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
     // Propagate the state forward to the current update time
     // Also augment it with a new clone!
-    propagator->propagate_and_clone(state, timestamp);
-
-    Eigen::Vector3d p0 = state->imu()->pos();
-    Eigen::Vector3d v0 = state->imu()->vel();
-    Eigen::Matrix3d R0 = state->imu()->Rot();
-    Eigen::Vector3d ba0 = state->imu()->bias_a();
-    Eigen::Vector3d bg0 = state->imu()->bias_g();
-
-    filter_p_->state_.setRotation(R0);
-    filter_p_->state_.setVelocity(v0);
-    filter_p_->state_.setPosition(p0);
-    filter_p_->state_.setGyroscopeBias(bg0);
-    filter_p_->state_.setAccelerometerBias(ba0);
-
-    // filter_p_->setState(robot_state);
-    // filter_p_->Propagate(imu_measurement_prev, dt,false);
-
-
+    ROS_INFO("Propagating....");
+    propagator->propagate_and_clone(state, filter_p_, timestamp);
     rT3 =  boost::posix_time::microsec_clock::local_time();
 
 
@@ -688,7 +695,7 @@ void RIEKFManager::do_feature_propagate_update(double timestamp) {
 
     // Pass them to our MSCKF updater
     // We update first so that our SLAM initialization will be more accurate??
-
+    ROS_INFO("Updating....");
     updaterMSCKF->update(state, filter_p_, featsup_MSCKF);
     rT4 =  boost::posix_time::microsec_clock::local_time();
 

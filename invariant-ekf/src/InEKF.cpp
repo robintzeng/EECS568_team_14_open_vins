@@ -190,29 +190,12 @@ void InEKF::Propagate(const Eigen::Matrix<double,6,1>& m, double dt) {
 }
 
 // InEKF Propagation - Inertial Data not propagate
-void InEKF::Propagate(const Eigen::Matrix<double,6,1>& m, double dt,bool x) {
-
-    Eigen::Vector3d w = m.head(3) - state_.getGyroscopeBias();    // Angular Velocity
-    Eigen::Vector3d a = m.tail(3) - state_.getAccelerometerBias(); // Linear Acceleration
+void InEKF::PropagateCovariance(double dt) {
+    // std::cout << "InEKF propagating covariance " << std::endl;
 
     Eigen::MatrixXd X = state_.getX();
     Eigen::MatrixXd P = state_.getP();
-
-    // Extract State
     Eigen::Matrix3d R = state_.getRotation();
-    Eigen::Vector3d v = state_.getVelocity();
-    Eigen::Vector3d p = state_.getPosition();
-
-    // Strapdown IMU motion model
-    /*Eigen::Vector3d phi = w*dt;
-    Eigen::Matrix3d R_pred = R * Exp_SO3(phi);
-    Eigen::Vector3d v_pred = v + (R*a + g_)*dt;
-    Eigen::Vector3d p_pred = p + v*dt + 0.5*(R*a + g_)*dt*dt;
-
-    // Set new state (bias has constant dynamics)
-    state_.setRotation(R_pred);
-    state_.setVelocity(v_pred);
-    state_.setPosition(p_pred);*/
 
     // ---- Linearized invariant error dynamics -----
     int dimX = state_.dimX();
@@ -262,6 +245,8 @@ void InEKF::Propagate(const Eigen::Matrix<double,6,1>& m, double dt,bool x) {
 
 // Correct State: Right-Invariant Observation
 void InEKF::Correct(const Observation& obs) {
+    // std::cout << "InEKF correction observations " << std::endl;
+
     // Compute Kalman Gain
     Eigen::MatrixXd P = state_.getP();
     Eigen::MatrixXd PHT = P * obs.H.transpose();
@@ -320,7 +305,7 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
         mapIntVector3dIterator it_prior = prior_landmarks_.find(it->id);
         map<int,int>::iterator it_estimated = estimated_landmarks_.find(it->id);
         if (it_prior!=prior_landmarks_.end()) {
-            cout << "A"  << endl;
+            cout << "Found in prior landmark set!"  << endl;
             // Found in prior landmark set
             int dimX = state_.dimX();
             int dimP = state_.dimP();
@@ -364,7 +349,7 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
             PI.block(startIndex,startIndex2,3,3) = Eigen::Matrix3d::Identity();
 
         } else if (it_estimated!=estimated_landmarks_.end()) {
-            cout << "B"  << endl;
+            cout << "Found in estimated landmark set!"  << endl;
             // Found in estimated landmark set
             int dimX = state_.dimX();
             int dimP = state_.dimP();
@@ -410,7 +395,7 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
 
 
         } else {
-            cout << "C"  << endl;
+            cout << "First time landmark detected!"  << endl;
             // First time landmark as been detected (add to list for later state augmentation)
             new_landmarks.push_back(*it);
         }
@@ -447,7 +432,7 @@ void InEKF::CorrectLandmarks(const vectorLandmarks& measured_landmarks) {
             P_aug = (F*P_aug*F.transpose() + G*noise_params_.getLandmarkCov()*G.transpose()).eval();
 
             // Update state and covariance
-            cout << "D"  << endl;
+            cout << "Augmenting state and convariance in InEKF::correct with new landmarks"  << endl;
             state_.setX(X_aug);
             state_.setP(P_aug);
 
